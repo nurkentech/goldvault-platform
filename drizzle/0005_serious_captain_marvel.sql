@@ -1,0 +1,1 @@
+ALTER TABLE `admin_credentials` ADD `recoveryCodes` json;

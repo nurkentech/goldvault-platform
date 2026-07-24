@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "server/aiCopilot.ts",
+    "server/aiCopilot.test.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "build",
+    "dist"
+  ],
+  "compilerOptions": {
+    "incremental": false,
+    "noEmit": true
+  }
+}
