@@ -1,0 +1,10 @@
+{
+  "name": "GoldVaults Investment Platform",
+  "short_name": "GoldVaults",
+  "description": "Secure gold and digital asset investing.",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#090d18",
+  "theme_color": "#d99b24",
+  "icons": [{ "src": "/goldvault-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}

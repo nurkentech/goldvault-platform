@@ -1,0 +1,83 @@
+{
+  "version": "7",
+  "dialect": "mysql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "5",
+      "when": 1782486215074,
+      "tag": "0000_complete_doctor_doom",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1782508732276,
+      "tag": "0001_oval_giant_girl",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1783169567804,
+      "tag": "0002_vengeful_sinister_six",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1783857143370,
+      "tag": "0003_greedy_otto_octavius",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1783927731589,
+      "tag": "0004_military_mauler",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1783928473105,
+      "tag": "0005_serious_captain_marvel",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1783930448769,
+      "tag": "0006_chemical_butterfly",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "5",
+      "when": 1784604916943,
+      "tag": "0007_nasty_brood",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "5",
+      "when": 1784671837510,
+      "tag": "0008_breezy_slapstick",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "5",
+      "when": 1784679651311,
+      "tag": "0009_simple_doorman",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "5",
+      "when": 1784855678100,
+      "tag": "0010_smooth_blue_marvel",
+      "breakpoints": true
+    }
+  ]
+}
