@@ -1,0 +1,183 @@
+name: Deploy production
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/deploy-production.yml"
+      - "app.js"
+      - "drizzle/**"
+      - "package.json"
+      - "patches/**"
+      - "pnpm-lock.yaml"
+      - "scripts/start-production.mjs"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Validate release and deploy to Namecheap
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DEPLOY_HOST: server398-4.web-hosting.com
+      DEPLOY_PORT: "21098"
+      DEPLOY_USER: goldpphb
+      APP_ROOT: /home/goldpphb/goldvault-app
+      VITE_APP_ID: ${{ secrets.VITE_APP_ID }}
+      VITE_OAUTH_PORTAL_URL: ${{ secrets.VITE_OAUTH_PORTAL_URL }}
+      VITE_FRONTEND_FORGE_API_URL: ${{ secrets.VITE_FRONTEND_FORGE_API_URL }}
+      VITE_FRONTEND_FORGE_API_KEY: ${{ secrets.VITE_FRONTEND_FORGE_API_KEY }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 10.4.1
+          run_install: false
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type-check
+        run: pnpm check
+
+      - name: Run tests
+        run: pnpm exec vitest run --pool=forks --maxWorkers=1 --no-file-parallelism
+
+      - name: Build production application
+        run: pnpm build
+
+      - name: Package production release
+        shell: bash
+        run: |
+          set -euo pipefail
+          release_dir="${RUNNER_TEMP}/goldvault-release"
+          mkdir -p "${release_dir}/scripts"
+          cp package.json pnpm-lock.yaml "${release_dir}/"
+          cp -R dist drizzle patches "${release_dir}/"
+          cp scripts/start-production.mjs "${release_dir}/scripts/"
+          pnpm --dir "${release_dir}" install --prod --frozen-lockfile
+          tar -C "${release_dir}" -czf "${RUNNER_TEMP}/goldvault-release.tgz" .
+
+      - name: Configure SSH
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.NAMECHEAP_SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.NAMECHEAP_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "${SSH_PRIVATE_KEY}"
+          test -n "${SSH_KNOWN_HOSTS}"
+          install -m 700 -d "${HOME}/.ssh"
+          printf '%s\n' "${SSH_PRIVATE_KEY}" > "${HOME}/.ssh/id_ed25519"
+          printf '%s\n' "${SSH_KNOWN_HOSTS}" > "${HOME}/.ssh/known_hosts"
+          chmod 600 "${HOME}/.ssh/id_ed25519" "${HOME}/.ssh/known_hosts"
+
+      - name: Upload release
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: |
+          set -euo pipefail
+          release_dir="${APP_ROOT}/releases/${GITHUB_SHA}"
+          ssh -p "${DEPLOY_PORT}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            "mkdir -p '${release_dir}' '${APP_ROOT}/tmp'"
+          scp -P "${DEPLOY_PORT}" "${RUNNER_TEMP}/goldvault-release.tgz" \
+            "${DEPLOY_USER}@${DEPLOY_HOST}:${release_dir}/release.tgz"
+          scp -P "${DEPLOY_PORT}" app.js \
+            "${DEPLOY_USER}@${DEPLOY_HOST}:${APP_ROOT}/app.js.next"
+
+      - name: Activate release
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -p "${DEPLOY_PORT}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            bash -s -- "${APP_ROOT}" "${GITHUB_SHA}" <<'REMOTE'
+          set -euo pipefail
+          app_root="$1"
+          release_sha="$2"
+          release_dir="${app_root}/releases/${release_sha}"
+
+          if [ -e "${app_root}/current" ] && [ ! -L "${app_root}/current" ]; then
+            echo "Refusing to replace non-symlink path: ${app_root}/current" >&2
+            exit 1
+          fi
+
+          tar -xzf "${release_dir}/release.tgz" -C "${release_dir}"
+          rm -f "${release_dir}/release.tgz"
+
+          previous_target="$(readlink "${app_root}/current" 2>/dev/null || true)"
+          printf '%s' "${previous_target}" > "${app_root}/.previous-release"
+
+          if [ ! -f "${app_root}/app.js.before-goldvault" ] && [ -f "${app_root}/app.js" ]; then
+            cp "${app_root}/app.js" "${app_root}/app.js.before-goldvault"
+          fi
+
+          mv "${app_root}/app.js.next" "${app_root}/app.js"
+          ln -sfn "releases/${release_sha}" "${app_root}/current"
+          touch "${app_root}/tmp/restart.txt"
+          REMOTE
+
+      - name: Verify production
+        if: github.event_name == 'workflow_dispatch'
+        id: health
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in {1..18}; do
+            if curl --fail --location --silent --show-error \
+              --max-time 15 https://goldvaults.us/ > /dev/null; then
+              exit 0
+            fi
+            echo "Health check ${attempt}/18 failed; retrying in 10 seconds"
+            sleep 10
+          done
+          exit 1
+
+      - name: Roll back failed release
+        if: github.event_name == 'workflow_dispatch' && steps.health.outcome == 'failure'
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -p "${DEPLOY_PORT}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            bash -s -- "${APP_ROOT}" <<'REMOTE'
+          set -euo pipefail
+          app_root="$1"
+          previous_target="$(cat "${app_root}/.previous-release" 2>/dev/null || true)"
+
+          if [ -n "${previous_target}" ]; then
+            ln -sfn "${previous_target}" "${app_root}/current"
+          else
+            rm -f "${app_root}/current"
+            if [ -f "${app_root}/app.js.before-goldvault" ]; then
+              cp "${app_root}/app.js.before-goldvault" "${app_root}/app.js"
+            fi
+          fi
+
+          touch "${app_root}/tmp/restart.txt"
+          REMOTE
+          echo "Production health check failed; the previous application was restored." >&2
+          exit 1
+
+      - name: Confirm deployment
+        if: github.event_name == 'workflow_dispatch' && steps.health.outcome == 'success'
+        run: echo "GoldVault ${GITHUB_SHA} is live at https://goldvaults.us/"
