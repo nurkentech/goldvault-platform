@@ -3,10 +3,15 @@ import fs from "fs";
 import { type Server } from "http";
 import { nanoid } from "nanoid";
 import path from "path";
-import { createServer as createViteServer } from "vite";
-import viteConfig from "../../vite.config";
 
 export async function setupVite(app: Express, server: Server) {
+  // Keep development tooling behind computed dynamic imports. The production
+  // server bundle intentionally excludes Vite and its plugins.
+  const vitePackage = "vite";
+  const viteConfigUrl = new URL("../../vite.config.ts", import.meta.url).href;
+  const [{ createServer: createViteServer }, { default: viteConfig }] =
+    await Promise.all([import(vitePackage), import(viteConfigUrl)]);
+
   const serverOptions = {
     middlewareMode: true,
     hmr: { server },
