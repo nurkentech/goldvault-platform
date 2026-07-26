@@ -7,6 +7,8 @@ const defaultBundlePath = fileURLToPath(
 );
 const bundlePath = path.resolve(process.argv[2] ?? defaultBundlePath);
 const bundle = fs.readFileSync(bundlePath, "utf8");
+const htmlPath = path.resolve(path.dirname(bundlePath), "public", "index.html");
+const html = fs.readFileSync(htmlPath, "utf8");
 const developmentPackages = [
   "vite",
   "@vitejs/plugin-react",
@@ -30,4 +32,9 @@ if (staticImports.length > 0) {
   );
 }
 
+if (/%VITE_[A-Z0-9_]+%/.test(html)) {
+  throw new Error("Production HTML contains unresolved Vite placeholders");
+}
+
 console.log("Production bundle has no static Vite dependencies");
+console.log("Production HTML has no unresolved Vite placeholders");

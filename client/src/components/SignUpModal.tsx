@@ -8,7 +8,6 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
-import { getLoginUrl } from "@/const";
 import {
   X, Mail, Phone, Eye, EyeOff, ArrowRight, CheckCircle2,
   AlertCircle, Shield, Sparkles, ChevronLeft, Lock, User, RefreshCw, Loader2,
@@ -21,6 +20,7 @@ interface SignUpModalProps {
   isOpen: boolean;
   onClose: () => void;
   initialMode?: "signup" | "login";
+  successPath?: string;
 }
 
 const COUNTRY_CODES = [
@@ -36,7 +36,7 @@ const COUNTRY_CODES = [
   { code: "+971", flag: "🇦🇪", name: "UAE" },
 ];
 
-export default function SignUpModal({ isOpen, onClose, initialMode = "signup" }: SignUpModalProps) {
+export default function SignUpModal({ isOpen, onClose, initialMode = "signup", successPath = "/profile" }: SignUpModalProps) {
   const [mode, setMode] = useState<"signup" | "login">(initialMode);
   const [step, setStep] = useState<Step>("method");
   const [authMethod, setAuthMethod] = useState<AuthMethod>("email");
@@ -676,7 +676,7 @@ export default function SignUpModal({ isOpen, onClose, initialMode = "signup" }:
                     <button
                       onClick={() => {
                         handleClose();
-                        navigate("/profile");
+                        navigate(successPath);
                       }}
                       className="w-full py-3 rounded-xl font-semibold text-sm transition-all duration-200"
                       style={{

@@ -80,6 +80,7 @@ import LanguageSwitcher from "./components/LanguageSwitcher";
 import VerifyTwoFactor from "./pages/VerifyTwoFactor";
 import AICopilot from "./pages/dashboard/AICopilot";
 import AdminAICopilot from "./pages/admin/AdminAICopilot";
+import Analytics from "./components/Analytics";
 
 // Admin wrapper to apply layout
 function AdminPage({ component: Component }: { component: React.ComponentType }) {
@@ -199,6 +200,7 @@ function App() {
       <ThemeProvider defaultTheme="system" switchable>
         <I18nProvider><TooltipProvider>
           <SeoManager />
+          <Analytics />
           <AccessibilityManager />
           <LanguageSwitcher />
           <Toaster />
