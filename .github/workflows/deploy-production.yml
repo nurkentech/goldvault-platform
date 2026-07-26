@@ -153,6 +153,59 @@ jobs:
           done
           exit 1
 
+      - name: Collect failed startup diagnostics
+        if: github.event_name == 'workflow_dispatch' && steps.health.outcome == 'failure'
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -p "${DEPLOY_PORT}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            bash -s -- "${APP_ROOT}" "${GITHUB_SHA}" <<'REMOTE'
+          set -u
+          app_root="$1"
+          release_sha="$2"
+          release_dir="${app_root}/releases/${release_sha}"
+
+          redact() {
+            sed -E \
+              -e 's#(mysql://[^:[:space:]]+):[^@[:space:]]+@#\1:***@#g' \
+              -e 's#((JWT_SECRET|OPENAI_API_KEY|RESEND_API_KEY|TWILIO_AUTH_TOKEN|BUILT_IN_FORGE_API_KEY)[=:])[[:graph:]]+#\1***#g'
+          }
+
+          echo "### Release state"
+          printf 'Application root: %s\n' "${app_root}"
+          printf 'Expected release: %s\n' "${release_dir}"
+          printf 'Current target: %s\n' "$(readlink "${app_root}/current" 2>/dev/null || echo missing)"
+          ls -ld "${app_root}" "${app_root}/app.js" "${app_root}/current" "${release_dir}" 2>&1 || true
+
+          echo "### Runtime"
+          runtime="${HOME}/nodevenv/goldvault-app/24/bin/node"
+          if [ -x "${runtime}" ]; then
+            "${runtime}" --version 2>&1 || true
+          else
+            command -v node 2>&1 || true
+            node --version 2>&1 || true
+          fi
+
+          echo "### Recent application logs"
+          {
+            find "${app_root}" -maxdepth 3 -type f \
+              \( -iname 'stderr.log' -o -iname 'error.log' -o -iname '*error*.log' \) \
+              -mmin -30 -print 2>/dev/null
+            find "${HOME}/logs" -maxdepth 2 -type f \
+              \( -iname '*.log' -o -iname '*error*' \) \
+              -mmin -30 -print 2>/dev/null
+          } | sort -u | while IFS= read -r log_file; do
+            [ -n "${log_file}" ] || continue
+            echo "--- ${log_file}"
+            tail -n 160 "${log_file}" 2>&1 | redact
+          done
+
+          echo "### cPanel application files"
+          find "${app_root}" -maxdepth 2 -mindepth 1 \
+            \( -path "${app_root}/releases" -o -path "${app_root}/releases/*" \) \
+            -prune -o -printf '%M %u %g %p -> %l\n' 2>/dev/null | sort
+          REMOTE
+
       - name: Roll back failed release
         if: github.event_name == 'workflow_dispatch' && steps.health.outcome == 'failure'
         shell: bash
