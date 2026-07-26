@@ -154,6 +154,7 @@ export function openSignUpModal(mode: "signup" | "login" = "signup") {
 function HomeContent() {
   const [showSignUp, setShowSignUp] = useState(false);
   const [signUpMode, setSignUpMode] = useState<"signup" | "login">("signup");
+  const [authSuccessPath, setAuthSuccessPath] = useState("/profile");
 
   const handleGetStarted = useCallback(() => {
     setSignUpMode("signup");
@@ -174,6 +175,29 @@ function HomeContent() {
     };
     window.addEventListener("goldvaults:open-signup", handler);
     return () => window.removeEventListener("goldvaults:open-signup", handler);
+  }, []);
+
+  // Open built-in authentication when protected routes redirect here because
+  // an external OAuth portal is not configured for this installation.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("auth") !== "login") return;
+
+    const requestedPath = params.get("returnPath");
+    if (requestedPath?.startsWith("/") && !requestedPath.startsWith("//")) {
+      setAuthSuccessPath(requestedPath);
+    }
+    setSignUpMode("login");
+    setShowSignUp(true);
+
+    params.delete("auth");
+    params.delete("returnPath");
+    const query = params.toString();
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`
+    );
   }, []);
 
   return (
@@ -244,6 +268,7 @@ function HomeContent() {
           isOpen={showSignUp}
           onClose={() => setShowSignUp(false)}
           initialMode={signUpMode}
+          successPath={authSuccessPath}
         />
       )}
     </div>
