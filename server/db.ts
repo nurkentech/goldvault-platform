@@ -1,4 +1,4 @@
-import { and, desc, eq, or } from "drizzle-orm";
+import { and, desc, eq, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
   InsertUser, InsertAddressBookEntry, InsertChatMessage, InsertMintingRecord,
@@ -33,8 +33,11 @@ export async function upsertUser(user: InsertUser): Promise<void> {
     if (v !== undefined) { (values as Record<string, unknown>)[f] = v ?? null; updateSet[f] = v ?? null; }
   }
   if (user.lastSignedIn !== undefined) { values.lastSignedIn = user.lastSignedIn; updateSet.lastSignedIn = user.lastSignedIn; }
-  const role = user.openId === ENV.ownerOpenId ? "admin" : (user.role ?? "user");
-  values.role = role; updateSet.role = role;
+  const role = user.openId === ENV.ownerOpenId ? "admin" : user.role;
+  if (role) {
+    values.role = role;
+    updateSet.role = role;
+  }
   if (!values.lastSignedIn) { values.lastSignedIn = new Date(); updateSet.lastSignedIn = values.lastSignedIn; }
   await db.insert(users).values(values).onDuplicateKeyUpdate({ set: updateSet });
   const [storedUser] = await db.select().from(users).where(eq(users.openId, user.openId)).limit(1);
@@ -48,6 +51,19 @@ export async function getUserByOpenId(openId: string) {
   const db = await getDb();
   if (!db) return undefined;
   const r = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
+  return r[0];
+}
+
+export async function getUserByVerifiedIdentifier(
+  identifier: string,
+  method: "email" | "phone",
+) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const condition = method === "email"
+    ? sql`LOWER(${users.email}) = ${identifier.toLowerCase()}`
+    : eq(users.phone, identifier);
+  const r = await db.select().from(users).where(condition).limit(1);
   return r[0];
 }
 
