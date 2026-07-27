@@ -78,6 +78,11 @@ export default function UserDashboardLayout({ children }: { children: React.Reac
     }
   }, [loading, user]);
 
+  useEffect(() => {
+    setMobileMenuOpen(false);
+    setUserMenuOpen(false);
+  }, [location]);
+
   // Loading state
   if (loading) {
     return <DashboardSkeleton />;
@@ -98,7 +103,8 @@ export default function UserDashboardLayout({ children }: { children: React.Reac
           fixed inset-y-0 left-0 z-50 flex flex-col
           bg-[oklch(0.12_0.02_255)] border-r border-white/5
           transition-all duration-300 ease-out
-          ${sidebarOpen ? "w-64" : "w-20"}
+          w-[min(20rem,85vw)]
+          ${sidebarOpen ? "lg:w-64" : "lg:w-20"}
           lg:relative
           ${mobileMenuOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
         `}
@@ -108,12 +114,20 @@ export default function UserDashboardLayout({ children }: { children: React.Reac
           <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center text-white font-bold text-sm shrink-0">
             GV
           </div>
-          {sidebarOpen && (
+          {(sidebarOpen || mobileMenuOpen) && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="overflow-hidden">
               <h1 className="text-base font-bold text-foreground leading-tight">GOLDVAULT</h1>
               <p className="text-[10px] text-muted-foreground tracking-wider">Global Financial Freedom</p>
             </motion.div>
           )}
+          <button
+            type="button"
+            aria-label="Close navigation menu"
+            onClick={() => setMobileMenuOpen(false)}
+            className="ml-auto flex min-h-11 min-w-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-white/5 hover:text-foreground lg:hidden"
+          >
+            <X className="h-5 w-5" />
+          </button>
         </div>
 
         {/* Nav Items */}
@@ -123,8 +137,9 @@ export default function UserDashboardLayout({ children }: { children: React.Reac
             const Icon = item.icon;
             return (
               <Link key={item.path} href={item.path}>
-                <div
-                  className={`
+                 <div
+                  onClick={() => setMobileMenuOpen(false)}
+                   className={`
                     flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium
                     transition-all duration-200 cursor-pointer group relative
                     ${isActive
@@ -134,15 +149,15 @@ export default function UserDashboardLayout({ children }: { children: React.Reac
                   `}
                 >
                   <Icon className={`w-5 h-5 shrink-0 ${isActive ? "text-amber-500" : ""}`} />
-                  {sidebarOpen && (
+                  {(sidebarOpen || mobileMenuOpen) && (
                     <span className="truncate">{t(item.label)}</span>
                   )}
-                  {item.badge && sidebarOpen && (
+                  {item.badge && (sidebarOpen || mobileMenuOpen) && (
                     <span className="ml-auto bg-amber-500 text-black text-[10px] font-bold px-1.5 py-0.5 rounded-full">
                       {item.badge}
                     </span>
                   )}
-                  {!sidebarOpen && (
+                  {!sidebarOpen && !mobileMenuOpen && (
                     <div className="absolute left-full ml-2 px-2 py-1 bg-popover text-popover-foreground text-xs rounded-md opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 shadow-lg">
                       {t(item.label)}
                     </div>
@@ -160,12 +175,12 @@ export default function UserDashboardLayout({ children }: { children: React.Reac
             className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-red-400 hover:bg-red-500/10 transition-all duration-200 w-full"
           >
             <LogOut className="w-5 h-5 shrink-0" />
-            {sidebarOpen && <span>{t("Logout")}</span>}
+            {(sidebarOpen || mobileMenuOpen) && <span>{t("Logout")}</span>}
           </button>
         </nav>
 
         {/* User Card in Sidebar Footer */}
-        {sidebarOpen && (
+        {(sidebarOpen || mobileMenuOpen) && (
           <div className="p-3 border-t border-white/5">
             <div className="bg-gradient-to-br from-amber-500/10 to-amber-600/5 rounded-xl p-3 border border-amber-500/10">
               <div className="flex items-center gap-2 mb-2">
@@ -205,10 +220,16 @@ export default function UserDashboardLayout({ children }: { children: React.Reac
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Top Header */}
-        <header className="h-14 border-b border-white/5 bg-[oklch(0.12_0.02_255)] flex items-center px-4 gap-3 shrink-0">
+        <header className="h-14 border-b border-white/5 bg-[oklch(0.12_0.02_255)] flex items-center px-2 sm:px-4 gap-1 sm:gap-3 shrink-0">
           {/* Mobile menu toggle */}
-          <button aria-label="Toggle navigation menu" onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="lg:hidden text-muted-foreground hover:text-foreground">
-            <Menu className="w-5 h-5" />
+          <button
+            type="button"
+            aria-label={mobileMenuOpen ? "Close navigation menu" : "Open navigation menu"}
+            aria-expanded={mobileMenuOpen}
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="flex min-h-11 min-w-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-white/5 hover:text-foreground lg:hidden"
+          >
+            {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
 
           {/* Sidebar toggle (desktop) */}
@@ -237,7 +258,7 @@ export default function UserDashboardLayout({ children }: { children: React.Reac
             {/* Search */}
             <button
               onClick={() => setSearchOpen(!searchOpen)}
-              className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors"
+              className="hidden sm:flex p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors"
             >
               <Search className="w-4 h-4" />
             </button>
@@ -246,7 +267,7 @@ export default function UserDashboardLayout({ children }: { children: React.Reac
             <button
               aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
               onClick={toggleTheme}
-              className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors"
+              className="hidden sm:flex p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors"
             >
               {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
             </button>
@@ -255,7 +276,7 @@ export default function UserDashboardLayout({ children }: { children: React.Reac
             <NotificationDropdown />
 
             {/* Messages */}
-            <button className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors relative">
+            <button className="hidden sm:block p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors relative">
               <MessageSquare className="w-4 h-4" />
               <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-amber-500 text-black text-[9px] font-bold rounded-full flex items-center justify-center">
                 2
@@ -284,7 +305,7 @@ export default function UserDashboardLayout({ children }: { children: React.Reac
                   <p className="text-xs font-semibold text-foreground leading-tight">{user?.name || "User"}</p>
                   <p className="text-[10px] text-amber-500">Gold Member</p>
                 </div>
-                <ChevronDown className="w-3 h-3 text-muted-foreground" />
+                <ChevronDown className="hidden sm:block w-3 h-3 text-muted-foreground" />
               </button>
 
               <AnimatePresence>
@@ -307,7 +328,9 @@ export default function UserDashboardLayout({ children }: { children: React.Reac
                     </Link>
                     <div className="border-t border-white/5" />
                     <button
-                      onClick={() => { window.location.href = "/"; }}
+                      onClick={() => {
+                        void logout().finally(() => { window.location.href = "/"; });
+                      }}
                       className="w-full px-4 py-2.5 text-sm text-red-400 hover:bg-red-500/10 text-left"
                     >
                       Sign Out
