@@ -1,0 +1,145 @@
+name: Provision production admin
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: provision-production-admin
+  cancel-in-progress: false
+
+jobs:
+  provision:
+    name: Provision admin through Namecheap SSH
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      DEPLOY_HOST: server398-4.web-hosting.com
+      DEPLOY_PORT: "21098"
+      DEPLOY_USER: goldpphb
+      APP_ROOT: /home/goldpphb/goldvault-app
+      ADMIN_USERNAME: ${{ secrets.ADMIN_BOOTSTRAP_USERNAME }}
+      ADMIN_EMAIL: ${{ secrets.ADMIN_BOOTSTRAP_EMAIL }}
+      ADMIN_PASSWORD: ${{ secrets.ADMIN_BOOTSTRAP_PASSWORD }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Validate bootstrap secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${ADMIN_USERNAME}"
+          test -n "${ADMIN_EMAIL}"
+          test -n "${ADMIN_PASSWORD}"
+
+      - name: Prepare encrypted credential payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          node --input-type=module - "${RUNNER_TEMP}/admin-credentials.json" <<'NODE'
+          import fs from "node:fs";
+          const target = process.argv[2];
+          fs.writeFileSync(target, JSON.stringify({
+            username: process.env.ADMIN_USERNAME,
+            email: process.env.ADMIN_EMAIL,
+            password: process.env.ADMIN_PASSWORD,
+          }), { mode: 0o600 });
+          NODE
+
+      - name: Configure SSH
+        shell: bash
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.NAMECHEAP_SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.NAMECHEAP_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "${SSH_PRIVATE_KEY}"
+          test -n "${SSH_KNOWN_HOSTS}"
+          install -m 700 -d "${HOME}/.ssh"
+          printf '%s\n' "${SSH_PRIVATE_KEY}" > "${HOME}/.ssh/id_ed25519"
+          printf '%s\n' "${SSH_KNOWN_HOSTS}" > "${HOME}/.ssh/known_hosts"
+          chmod 600 "${HOME}/.ssh/id_ed25519" "${HOME}/.ssh/known_hosts"
+
+      - name: Upload one-time provisioner
+        shell: bash
+        run: |
+          set -euo pipefail
+          remote_dir="${APP_ROOT}/tmp/admin-provision-${GITHUB_RUN_ID}"
+          ssh -p "${DEPLOY_PORT}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            "install -m 700 -d '${remote_dir}'"
+          scp -P "${DEPLOY_PORT}" scripts/provision-admin.mjs \
+            "${DEPLOY_USER}@${DEPLOY_HOST}:${remote_dir}/provision-admin.mjs"
+          scp -P "${DEPLOY_PORT}" "${RUNNER_TEMP}/admin-credentials.json" \
+            "${DEPLOY_USER}@${DEPLOY_HOST}:${remote_dir}/credentials.json"
+          ssh -p "${DEPLOY_PORT}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            "chmod 600 '${remote_dir}/credentials.json' '${remote_dir}/provision-admin.mjs'"
+
+      - name: Create admin in production database
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -p "${DEPLOY_PORT}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            bash -s -- "${APP_ROOT}" "${GITHUB_RUN_ID}" <<'REMOTE'
+          set -euo pipefail
+          app_root="$1"
+          run_id="$2"
+          test -n "${run_id}"
+          remote_dir="${app_root}/tmp/admin-provision-${run_id}"
+          case "${remote_dir}" in
+            "${app_root}/tmp/admin-provision-"*) ;;
+            *) echo "Unsafe remote cleanup path" >&2; exit 1 ;;
+          esac
+          trap 'rm -rf -- "${remote_dir}"' EXIT
+
+          current="$(readlink -f "${app_root}/current")"
+          runtime="${HOME}/nodevenv/goldvault-app/24/bin/node"
+          test -f "${current}/package.json"
+          test -x "${runtime}"
+
+          database_url=""
+          for env_file in /proc/[0-9]*/environ; do
+            [ -r "${env_file}" ] || continue
+            candidate="$(
+              tr '\0' '\n' < "${env_file}" 2>/dev/null |
+                sed -n 's/^DATABASE_URL=//p' |
+                head -n 1 || true
+            )"
+            if [ -n "${candidate}" ]; then
+              database_url="${candidate}"
+              break
+            fi
+          done
+          test -n "${database_url}"
+
+          APP_CURRENT="${current}" DATABASE_URL="${database_url}" \
+            "${runtime}" "${remote_dir}/provision-admin.mjs" \
+            "${remote_dir}/credentials.json"
+          REMOTE
+
+      - name: Remove remote credential payload
+        if: always()
+        continue-on-error: true
+        shell: bash
+        run: |
+          ssh -p "${DEPLOY_PORT}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            bash -s -- "${APP_ROOT}" "${GITHUB_RUN_ID}" <<'REMOTE'
+          set -euo pipefail
+          app_root="$1"
+          run_id="$2"
+          test -n "${run_id}"
+          remote_dir="${app_root}/tmp/admin-provision-${run_id}"
+          case "${remote_dir}" in
+            "${app_root}/tmp/admin-provision-"*) rm -rf -- "${remote_dir}" ;;
+            *) echo "Unsafe remote cleanup path" >&2; exit 1 ;;
+          esac
+          REMOTE
+
+      - name: Remove runner credential payload
+        if: always()
+        shell: bash
+        run: rm -f -- "${RUNNER_TEMP}/admin-credentials.json"
