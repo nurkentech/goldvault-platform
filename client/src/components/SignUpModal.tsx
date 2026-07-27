@@ -9,8 +9,8 @@ import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import {
-  X, Mail, Phone, Eye, EyeOff, ArrowRight, CheckCircle2,
-  AlertCircle, Shield, Sparkles, ChevronLeft, Lock, User, RefreshCw, Loader2,
+  X, Mail, Phone, ArrowRight, CheckCircle2,
+  AlertCircle, Shield, Sparkles, ChevronLeft, User, RefreshCw, Loader2,
 } from "lucide-react";
 
 type AuthMethod = "email" | "phone";
@@ -43,8 +43,6 @@ export default function SignUpModal({ isOpen, onClose, initialMode = "signup", s
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [countryCode, setCountryCode] = useState("+1");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -106,12 +104,6 @@ export default function SignUpModal({ isOpen, onClose, initialMode = "signup", s
     if (authMethod === "phone" && !validatePhone(phone)) {
       newErrors.phone = "Please enter a valid phone number";
     }
-    if (mode === "signup" && !password) {
-      newErrors.password = "Password is required";
-    }
-    if (mode === "signup" && password && password.length < 8) {
-      newErrors.password = "Password must be at least 8 characters";
-    }
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       return;
@@ -148,10 +140,13 @@ export default function SignUpModal({ isOpen, onClose, initialMode = "signup", s
     try {
       await verifyOtpMutation.mutateAsync({ identifier, code });
       if (mode === "signup") {
+        await utils.auth.me.invalidate();
         setStep("profile");
       } else {
-        setStep("success");
+        await utils.auth.me.invalidate();
         toast.success("Signed in successfully!", { description: "Welcome back to GoldVaults.us" });
+        handleClose();
+        navigate(successPath);
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Invalid verification code";
@@ -172,45 +167,35 @@ export default function SignUpModal({ isOpen, onClose, initialMode = "signup", s
       return;
     }
     setErrors({});
-    // Persist profile data to the server
     try {
       await updateProfileMutation.mutateAsync({
         name: `${firstName.trim()} ${lastName.trim()}`,
         username: username.trim(),
       });
       await utils.auth.me.invalidate();
-    } catch {
-      // Non-fatal: profile can be updated later from /profile
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Unable to save your profile";
+      setErrors({ profile: message });
+      toast.error("Could not complete your profile", { description: message });
+      return;
     }
-    setStep("success");
     toast.success("Welcome to GoldVaults.us! \uD83C\uDF89", {
       description: "Your account has been created. You've received 500 welcome GoldCoins!",
       duration: 6000,
     });
+    handleClose();
+    navigate(successPath);
   }
 
   function handleClose() {
     onClose();
     setTimeout(() => {
       setStep("method");
-      setEmail(""); setPhone(""); setPassword(""); setOtp(["","","","","",""]);
+      setEmail(""); setPhone(""); setOtp(["","","","","",""]);
       setFirstName(""); setLastName(""); setUsername("");
       setErrors({});
     }, 300);
   }
-
-  const passwordStrength = () => {
-    if (!password) return 0;
-    let score = 0;
-    if (password.length >= 8) score++;
-    if (/[A-Z]/.test(password)) score++;
-    if (/[0-9]/.test(password)) score++;
-    if (/[^A-Za-z0-9]/.test(password)) score++;
-    return score;
-  };
-
-  const strengthLabel = ["", "Weak", "Fair", "Good", "Strong"][passwordStrength()];
-  const strengthColor = ["", "bg-red-400", "bg-amber-400", "bg-teal-400", "bg-green-500"][passwordStrength()];
 
   if (!isOpen) return null;
 
@@ -418,44 +403,11 @@ export default function SignUpModal({ isOpen, onClose, initialMode = "signup", s
                       </div>
                     )}
 
-                    {/* Password */}
-                    <div className="space-y-1.5">
-                      <label className="text-sm font-medium text-foreground">
-                        Password{" "}
-                        {mode === "login" && (
-                          <button onClick={() => toast.info("Password reset coming soon")} className="text-amber-500 text-xs font-normal ml-1 hover:underline">Forgot?</button>
-                        )}
-                      </label>
-                      <div className="relative">
-                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                        <input
-                          type={showPassword ? "text" : "password"}
-                          placeholder={mode === "signup" ? "Create a strong password" : "Enter your password"}
-                          value={password}
-                          onChange={e => { setPassword(e.target.value); setErrors(prev => ({ ...prev, password: "" })); }}
-                          className={`w-full pl-9 pr-10 py-2.5 bg-background border rounded-xl text-sm focus:outline-none focus:ring-2 transition-all ${
-                            errors.password ? "border-red-400 focus:ring-red-400/30" : "border-border focus:ring-amber-400/40 focus:border-amber-400"
-                          }`}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowPassword(!showPassword)}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                        >
-                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                        </button>
-                      </div>
-                      {errors.password && <p className="flex items-center gap-1.5 text-xs text-red-500"><AlertCircle className="w-3.5 h-3.5" />{errors.password}</p>}
-                      {mode === "signup" && password && (
-                        <div className="space-y-1">
-                          <div className="flex gap-1">
-                            {[1, 2, 3, 4].map(i => (
-                              <div key={i} className={`flex-1 h-1 rounded-full transition-colors duration-300 ${i <= passwordStrength() ? strengthColor : "bg-border"}`} />
-                            ))}
-                          </div>
-                          <p className="text-xs text-muted-foreground">Password strength: <span className="font-medium">{strengthLabel}</span></p>
-                        </div>
-                      )}
+                    <div className="flex items-start gap-2 rounded-xl border border-amber-500/20 bg-amber-500/10 p-3">
+                      <Shield className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-400" />
+                      <p className="text-xs leading-relaxed text-muted-foreground">
+                        No password is needed. We will send a one-time security code to verify your identity.
+                      </p>
                     </div>
 
                     <button
@@ -471,7 +423,7 @@ export default function SignUpModal({ isOpen, onClose, initialMode = "signup", s
                       {sendOtpMutation.isPending ? (
                         <><Loader2 className="w-4 h-4 animate-spin" /> Sending code...</>
                       ) : (
-                        <><ArrowRight className="w-4 h-4" /> {mode === "signup" ? "Send Verification Code" : "Sign In"}</>
+                        <><ArrowRight className="w-4 h-4" /> {mode === "signup" ? "Send Verification Code" : "Send Sign-In Code"}</>
                       )}
                     </button>
 
@@ -631,16 +583,25 @@ export default function SignUpModal({ isOpen, onClose, initialMode = "signup", s
                       </p>
                     </div>
 
+                    {errors.profile && (
+                      <p className="flex items-center gap-1.5 text-xs text-red-500">
+                        <AlertCircle className="w-3.5 h-3.5" />{errors.profile}
+                      </p>
+                    )}
+
                     <button
                       onClick={handleCompleteProfile}
-                      className="w-full py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition-all duration-200"
+                      disabled={updateProfileMutation.isPending}
+                      className="w-full py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
                       style={{
                         background: "linear-gradient(135deg, oklch(0.78 0.18 65), oklch(0.68 0.16 50))",
                         color: "oklch(0.18 0.04 220)",
                         boxShadow: "0 2px 12px oklch(0.68 0.16 50 / 0.35)",
                       }}
                     >
-                      <User className="w-4 h-4" /> Complete Profile
+                      {updateProfileMutation.isPending
+                        ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving profile...</>
+                        : <><User className="w-4 h-4" /> Complete Profile</>}
                     </button>
                   </motion.div>
                 )}

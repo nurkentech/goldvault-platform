@@ -1,16 +1,19 @@
+import crypto from "node:crypto";
 import { TRPCError } from "@trpc/server";
 import { and, eq, isNotNull, sql } from "drizzle-orm";
 import { z } from "zod";
-import { COOKIE_NAME } from "@shared/const";
+import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
+import { sdk } from "./_core/sdk";
 import { systemRouter } from "./_core/systemRouter";
 import { adminRouter } from "./adminRouter";
 import { adminAuthRouter } from "./adminAuth";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
-import { sendOtpEmail, sendOtpSms, storeOtp, verifyOtp } from "./emailOtp";
+import { normalizeOtpIdentifier, sendOtpEmail, sendOtpSms, storeOtp, verifyOtp } from "./emailOtp";
 import { getFiatRates, getLiveMarketPrices } from "./marketData";
 import { investmentCreationSchema, kycSubmissionSchema, metadataSchema, profileUpdateSchema, safeText } from "./validation";
 import {
+  createUserSession,
   listUserSessions,
   revokeOtherUserSessions,
   revokeSessionByToken,
@@ -29,7 +32,8 @@ import {
   createMintingRecord, createNfcCard, createNotification, createPriceAlert,
   createSocialPost, createTransaction, deleteAddressBookEntry, deletePriceAlert,
   getActiveChallenges, getCommunityFeed, getLeaderboard, getUserAddressBook,
-  getUserById, getUserChallengeProgress, getUserMintingHistory, getUserNfcCards,
+  getUserById, getUserByOpenId, getUserByVerifiedIdentifier,
+  getUserChallengeProgress, getUserMintingHistory, getUserNfcCards,
   getUserNotifications, getUserPriceAlerts, getUserTransactions, getUserWallets,
   initDefaultWallets, markAllNotificationsRead, markNotificationRead, sendChatMessage,
   toggle2FA, updateAddressBookEntry, updateNfcCard, updateNotifPrefs, updateUserGoldCoins,
@@ -480,9 +484,22 @@ export const appRouter = router({
         method: z.enum(["email", "phone"]),
       }))
       .mutation(async ({ input }) => {
-        const code = await storeOtp(input.identifier, input.method);
+        const identifier = normalizeOtpIdentifier(input.identifier);
+        const isValidIdentifier = input.method === "email"
+          ? /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier)
+          : /^\+[1-9]\d{7,14}$/.test(identifier);
+        if (!isValidIdentifier) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: input.method === "email"
+              ? "Enter a valid email address."
+              : "Enter a valid phone number with country code.",
+          });
+        }
+
+        const code = await storeOtp(identifier, input.method);
         if (input.method === "email") {
-          const result = await sendOtpEmail(input.identifier, code);
+          const result = await sendOtpEmail(identifier, code);
           if (!result.success) {
             throw new TRPCError({
               code: "INTERNAL_SERVER_ERROR",
@@ -490,7 +507,7 @@ export const appRouter = router({
             });
           }
         } else {
-          const result = await sendOtpSms(input.identifier, code);
+          const result = await sendOtpSms(identifier, code);
           if (!result.success) {
             throw new TRPCError({
               code: "INTERNAL_SERVER_ERROR",
@@ -498,22 +515,78 @@ export const appRouter = router({
             });
           }
         }
-        return { success: true, message: `Verification code sent to ${input.identifier}` };
+        return { success: true, message: `Verification code sent to ${identifier}` };
       }),
     verify: publicProcedure
       .input(z.object({
         identifier: z.string().min(3).max(320),
         code: z.string().length(6),
       }))
-      .mutation(async ({ input }) => {
-        const result = await verifyOtp(input.identifier, input.code);
-        if (!result.valid) {
+      .mutation(async ({ ctx, input }) => {
+        const identifier = normalizeOtpIdentifier(input.identifier);
+        const verification = await verifyOtp(identifier, input.code);
+        if (!verification.valid || !verification.method) {
           throw new TRPCError({
             code: "BAD_REQUEST",
-            message: result.reason ?? "Invalid verification code.",
+            message: verification.reason ?? "Invalid verification code.",
           });
         }
-        return { success: true };
+
+        const existingUser = await getUserByVerifiedIdentifier(identifier, verification.method);
+        const openId = existingUser?.openId ?? `otp_${crypto
+          .createHash("sha256")
+          .update(`${verification.method}:${identifier}`)
+          .digest("base64url")}`;
+        const signedInAt = new Date();
+
+        await upsertUser({
+          openId,
+          email: verification.method === "email" ? identifier : undefined,
+          phone: verification.method === "phone" ? identifier : undefined,
+          loginMethod: `otp_${verification.method}`,
+          lastSignedIn: signedInAt,
+        });
+
+        const user = await getUserByOpenId(openId);
+        if (!user) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Unable to create or load your account.",
+          });
+        }
+
+        const sessionToken = await sdk.createSessionToken(openId, {
+          name: user.name || "GoldVaults User",
+          expiresInMs: ONE_YEAR_MS,
+        });
+        const session = await createUserSession(
+          user.id,
+          sessionToken,
+          ctx.req,
+          new Date(Date.now() + ONE_YEAR_MS),
+        );
+        if (!session) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Unable to create your secure session.",
+          });
+        }
+
+        const cookieOptions = getSessionCookieOptions(ctx.req);
+        ctx.res.cookie(COOKIE_NAME, sessionToken, {
+          ...cookieOptions,
+          maxAge: ONE_YEAR_MS,
+        });
+
+        return {
+          success: true,
+          user: {
+            id: user.id,
+            email: user.email,
+            phone: user.phone,
+            name: user.name,
+          },
+        };
       }),
   }),
   priceAlert: router({

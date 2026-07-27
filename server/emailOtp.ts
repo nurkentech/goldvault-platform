@@ -12,6 +12,13 @@ import { otpCodes } from "../drizzle/schema";
 const OTP_EXPIRY_MS = 10 * 60 * 1000; // 10 minutes
 const MAX_ATTEMPTS = 5;
 
+/** Canonicalize identifiers so requesting and verifying an OTP use the same account key. */
+export function normalizeOtpIdentifier(identifier: string): string {
+  const trimmed = identifier.trim();
+  if (trimmed.includes("@")) return trimmed.toLowerCase();
+  return trimmed.replace(/[\s()-]/g, "");
+}
+
 /** Generate a cryptographically random 6-digit OTP */
 function generateOtp(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
@@ -22,13 +29,14 @@ export async function storeOtp(identifier: string, method: "email" | "phone"): P
   const db = await getDb();
   const code = generateOtp();
   const expiresAt = new Date(Date.now() + OTP_EXPIRY_MS);
+  const normalizedIdentifier = normalizeOtpIdentifier(identifier);
 
   if (db) {
     // Delete any existing OTPs for this identifier
-    await db.delete(otpCodes).where(eq(otpCodes.identifier, identifier.toLowerCase()));
+    await db.delete(otpCodes).where(eq(otpCodes.identifier, normalizedIdentifier));
     // Insert new OTP
     await db.insert(otpCodes).values({
-      identifier: identifier.toLowerCase(),
+      identifier: normalizedIdentifier,
       code,
       method,
       attempts: 0,
@@ -43,8 +51,9 @@ export async function storeOtp(identifier: string, method: "email" | "phone"): P
 export async function verifyOtp(
   identifier: string,
   inputCode: string
-): Promise<{ valid: boolean; reason?: string }> {
+): Promise<{ valid: boolean; reason?: string; method?: "email" | "phone" }> {
   const db = await getDb();
+  const normalizedIdentifier = normalizeOtpIdentifier(identifier);
 
   if (!db) {
     return { valid: false, reason: "Database unavailable. Please try again." };
@@ -56,7 +65,7 @@ export async function verifyOtp(
   const rows = await db
     .select()
     .from(otpCodes)
-    .where(eq(otpCodes.identifier, identifier.toLowerCase()))
+    .where(eq(otpCodes.identifier, normalizedIdentifier))
     .limit(1);
 
   const entry = rows[0];
@@ -90,7 +99,7 @@ export async function verifyOtp(
 
   // Valid — mark as used and delete
   await db.delete(otpCodes).where(eq(otpCodes.id, entry.id));
-  return { valid: true };
+  return { valid: true, method: entry.method };
 }
 
 /** Send OTP via email using Resend */
