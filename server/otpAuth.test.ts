@@ -99,7 +99,7 @@ describe("OTP authentication", () => {
       options: {
         httpOnly: true,
         secure: true,
-        sameSite: "none",
+        sameSite: "lax",
         path: "/",
         maxAge: ONE_YEAR_MS,
       },

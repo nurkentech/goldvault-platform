@@ -154,7 +154,7 @@ export function openSignUpModal(mode: "signup" | "login" = "signup") {
 function HomeContent() {
   const [showSignUp, setShowSignUp] = useState(false);
   const [signUpMode, setSignUpMode] = useState<"signup" | "login">("signup");
-  const [authSuccessPath, setAuthSuccessPath] = useState("/profile");
+  const [authSuccessPath, setAuthSuccessPath] = useState("/dashboard");
 
   const handleGetStarted = useCallback(() => {
     setSignUpMode("signup");

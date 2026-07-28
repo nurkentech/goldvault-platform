@@ -35,6 +35,10 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 
 async function startServer() {
   const app = express();
+  // Namecheap terminates HTTPS before forwarding requests to Passenger.
+  // Trust the first proxy so req.protocol and secure cookies reflect the
+  // browser-facing HTTPS connection.
+  app.set("trust proxy", 1);
   const server = createServer(app);
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
