@@ -156,15 +156,32 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          ssh -p "${DEPLOY_PORT}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            bash -s <<'REMOTE'
+          set -euo pipefail
           for attempt in {1..18}; do
-            if curl --fail --location --silent --show-error \
-              --max-time 15 https://goldvaults.us/ > /dev/null; then
+            health_body="$(
+              curl --fail --location --silent --show-error \
+                --max-time 15 https://goldvaults.us/healthz || true
+            )"
+            if [ "${health_body}" = "ok" ] && \
+              curl --fail --location --silent --show-error \
+                --max-time 15 https://goldvaults.us/ > /dev/null; then
               exit 0
             fi
             echo "Health check ${attempt}/18 failed; retrying in 10 seconds"
             sleep 10
           done
+
+          echo "### Final health response"
+          curl --location --silent --show-error --max-time 15 \
+            --dump-header - https://goldvaults.us/healthz || true
+          echo
+          echo "### Final homepage response headers"
+          curl --location --silent --show-error --max-time 15 \
+            --dump-header - --output /dev/null https://goldvaults.us/ || true
           exit 1
+          REMOTE
 
       - name: Collect failed startup diagnostics
         if: github.event_name == 'workflow_dispatch' && steps.health.outcome == 'failure'
