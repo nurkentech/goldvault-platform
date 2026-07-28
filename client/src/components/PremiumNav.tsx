@@ -5,11 +5,12 @@ import {
   Search, Globe, Sun, Moon, Download, ChevronDown, X, Menu,
   TrendingUp, Wallet, BookOpen, Newspaper, HelpCircle, Info, Mail,
   Zap, BarChart2, ArrowLeftRight, ShoppingCart, Users, Layers, Gift, CreditCard, Landmark,
-  User, LogOut, LayoutDashboard, Shield,
+  User, LogOut, LayoutDashboard, Shield, FileText,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
+import { trpc } from "@/lib/trpc";
 
 const navLinks = [
   { label: "Home", href: "/" },
@@ -85,6 +86,26 @@ export default function PremiumNav({ onLoginClick, onRegisterClick, isDark = tru
   const searchRef = useRef<HTMLInputElement>(null);
   const { user, isAuthenticated, logout } = useAuth();
   const [location, navigate] = useLocation();
+  const { data: website } = trpc.content.website.useQuery(undefined, {
+    staleTime: 60_000,
+    retry: false,
+  });
+  const branding = website?.branding;
+  const managedNavLinks = navLinks.map((link) => {
+    if (link.label !== "Learn" || !link.sub || !website?.navigationPages.length) return link;
+    return {
+      ...link,
+      sub: [
+        ...link.sub,
+        ...website.navigationPages.map((page) => ({
+          label: page.title,
+          icon: FileText,
+          desc: "Published by GoldVaults",
+          href: `/${page.slug}`,
+        })),
+      ],
+    };
+  });
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);
@@ -145,17 +166,20 @@ export default function PremiumNav({ onLoginClick, onRegisterClick, isDark = tru
             {/* Logo */}
             <Link href="/" className="flex items-center gap-2.5 shrink-0" onClick={() => setActiveLink("Home")}>
               <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center shadow-lg shadow-amber-500/30">
-                <span className="text-slate-900 font-black text-sm">GV</span>
+                {branding?.logoUrl ? (
+                  <img src={branding.logoUrl} alt={branding.logoAlt} className="h-full w-full rounded-xl object-contain" />
+                ) : (
+                  <span className="text-slate-900 font-black text-sm">GV</span>
+                )}
               </div>
               <span className="font-bold text-lg text-white hidden sm:block">
-                Gold<span className="text-amber-400">Vaults</span>
-                <span className="text-slate-400 text-xs font-normal">.us</span>
+                {branding?.siteName ?? "GoldVaults"}
               </span>
             </Link>
 
             {/* Desktop Nav Links */}
             <div className="hidden xl:flex items-center gap-0.5">
-              {navLinks.slice(0, 8).map((link) => (
+              {managedNavLinks.slice(0, 8).map((link) => (
                 <div
                   key={link.label}
                   className="relative"
@@ -398,7 +422,7 @@ export default function PremiumNav({ onLoginClick, onRegisterClick, isDark = tru
             >
               <div id="mobile-navigation" className="mx-auto w-full max-w-xl px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
                 <div className="space-y-1">
-                  {navLinks.map((link) => (
+                  {managedNavLinks.map((link) => (
                     <div key={link.label} className="overflow-hidden rounded-xl">
                       <div className="flex items-stretch">
                         <button

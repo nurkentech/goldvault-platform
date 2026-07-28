@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ChevronLeft, ChevronRight, Star, ChevronDown, Send, Twitter, Facebook, Instagram, Youtube, Linkedin, Github, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 import { openSignUpModal } from "@/pages/Home";
+import { trpc } from "@/lib/trpc";
 
 // ─── Testimonials ────────────────────────────────────────────────────────────
 const TESTIMONIALS = [
@@ -370,6 +371,21 @@ const SOCIAL_LINKS = [
 ];
 
 export function Footer() {
+  const { data: website } = trpc.content.website.useQuery(undefined, {
+    staleTime: 60_000,
+    retry: false,
+  });
+  const branding = website?.branding;
+  const footerLinks = {
+    ...FOOTER_LINKS,
+    Learn: [
+      ...FOOTER_LINKS.Learn,
+      ...(website?.navigationPages.map((page) => ({
+        label: page.title,
+        href: `/${page.slug}`,
+      })) ?? []),
+    ],
+  };
   return (
     <footer className="bg-slate-950 border-t border-white/8">
       <div className="max-w-[1400px] mx-auto px-4 lg:px-6 py-16">
@@ -378,11 +394,15 @@ export function Footer() {
           {/* Brand */}
           <div className="col-span-2 lg:col-span-1">
             <div className="flex items-center gap-2 mb-4">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-slate-900 font-black text-sm">GV</div>
-              <span className="font-black text-white text-lg">GoldVaults</span>
+              {branding?.logoUrl ? (
+                <img src={branding.logoUrl} alt={branding.logoAlt} className="h-9 w-9 rounded-xl object-contain" />
+              ) : (
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-slate-900 font-black text-sm">GV</div>
+              )}
+              <span className="font-black text-white text-lg">{branding?.siteName ?? "GoldVaults"}</span>
             </div>
             <p className="text-sm text-slate-400 leading-relaxed mb-4">
-              The only platform where your crypto buys real, physical, vault-stored gold. Convert BTC, ETH, USDT and 300+ cryptocurrencies into 99.99% pure gold bars — audited, insured, and always redeemable.
+              {branding?.tagline || "The only platform where your crypto buys real, physical, vault-stored gold."}
             </p>
             <div className="flex flex-wrap gap-2">
               {SOCIAL_LINKS.map(({ icon: Icon, label, href }) => (
@@ -399,7 +419,7 @@ export function Footer() {
           </div>
 
           {/* Link columns */}
-          {Object.entries(FOOTER_LINKS).map(([category, links]) => (
+          {Object.entries(footerLinks).map(([category, links]) => (
             <div key={category}>
               <h4 className="font-bold text-white text-sm mb-4">{category}</h4>
               <ul className="space-y-2">
