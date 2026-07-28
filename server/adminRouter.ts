@@ -15,11 +15,80 @@ import { sendTransactionalEmail } from "./transactionalEmail";
 import { listAdminAuditLogs } from "./adminAudit";
 import { payReferralCommission } from "./referrals";
 import { dispatchWebhook, recalculateLoyaltyTier } from "./advancedModules";
+import {
+  deleteWebsitePage,
+  getWebsiteContent,
+  saveWebsiteBranding,
+  saveWebsiteHome,
+  saveWebsitePage,
+} from "./cms";
+import { storagePut } from "./storage";
 
 const decimalString = z
   .string()
   .trim()
   .regex(/^\d+(?:\.\d{1,8})?$/, "Enter a valid non-negative amount");
+
+const safeCmsText = (minimum: number, maximum: number) =>
+  z.string().trim().min(minimum).max(maximum);
+const safeCmsUrl = z
+  .string()
+  .trim()
+  .max(2048)
+  .refine(
+    (value) =>
+      value === "" ||
+      value.startsWith("/") ||
+      /^https:\/\/[^\s]+$/i.test(value),
+    "Use a site path or secure HTTPS URL",
+  );
+const reservedPageSlugs = new Set([
+  "admin", "dashboard", "profile", "verify-2fa", "api", "assets", "buy-gold",
+  "gvt-token", "vault-storage", "physical-delivery", "gold-price-alerts",
+  "exchange", "markets", "nfc-card", "goldcoins", "referral", "ref", "about",
+  "mining-partners", "vault-audits", "security", "careers", "contact",
+  "how-it-works", "faq", "blog", "gold-vs-bitcoin", "trade", "social",
+  "challenges", "gold-etf", "bitcoin-wallet", "mint", "wallet", "deposit",
+  "withdraw", "investments", "transactions", "rewards", "cards", "support",
+  "settings", "notifications", "privacy-policy", "terms", "cookie-policy",
+  "risk-disclosure", "404",
+]);
+const pageSlug = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .min(2)
+  .max(96)
+  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Use lowercase letters, numbers, and hyphens")
+  .refine((slug) => !reservedPageSlugs.has(slug), "That URL is reserved by the platform");
+const websiteBrandingSchema = z.object({
+  siteName: safeCmsText(1, 128),
+  tagline: z.string().trim().max(240),
+  logoUrl: safeCmsUrl,
+  logoAlt: safeCmsText(1, 160),
+});
+const websiteHomeSchema = z.object({
+  badge: z.string().trim().max(160),
+  title: safeCmsText(1, 160),
+  titleAccent: z.string().trim().max(160),
+  subtitle: safeCmsText(1, 1200),
+  primaryCtaLabel: safeCmsText(1, 64),
+  secondaryCtaLabel: safeCmsText(1, 64),
+  secondaryCtaUrl: safeCmsUrl.refine((value) => value !== "", "CTA URL is required"),
+  heroImageUrl: safeCmsUrl,
+});
+const websitePageSchema = z.object({
+  id: z.string().uuid().optional(),
+  slug: pageSlug,
+  title: safeCmsText(1, 200),
+  excerpt: z.string().trim().max(500),
+  body: safeCmsText(1, 50_000),
+  seoTitle: z.string().trim().max(200),
+  seoDescription: z.string().trim().max(320),
+  status: z.enum(["draft", "published"]),
+  showInNavigation: z.boolean(),
+  sortOrder: z.number().int().min(0).max(10_000),
+});
 
 const platformSettingsSchema = z.object({
   general: z.object({
@@ -80,7 +149,52 @@ export const adminRouter = router({
     get: adminProcedure.query(async () => getPlatformSettings()),
     update: adminProcedure
       .input(platformSettingsSchema)
-      .mutation(async ({ input }) => savePlatformSettings(input)),
+      .mutation(async ({ input }) => {
+        const current = await getPlatformSettings();
+        return savePlatformSettings({ ...current, ...input, website: current.website });
+      }),
+  }),
+
+  cms: router({
+    get: adminProcedure.query(() => getWebsiteContent()),
+    updateBranding: adminProcedure
+      .input(websiteBrandingSchema)
+      .mutation(({ input }) => saveWebsiteBranding(input)),
+    updateHome: adminProcedure
+      .input(websiteHomeSchema)
+      .mutation(({ input }) => saveWebsiteHome(input)),
+    savePage: adminProcedure
+      .input(websitePageSchema)
+      .mutation(({ input }) => saveWebsitePage(input)),
+    deletePage: adminProcedure
+      .input(z.object({ id: z.string().uuid() }))
+      .mutation(({ input }) => deleteWebsitePage(input.id)),
+    uploadBrandAsset: adminProcedure
+      .input(z.object({
+        filename: z.string().trim().min(1).max(180),
+        mimeType: z.enum(["image/jpeg", "image/png", "image/webp", "image/gif"]),
+        dataBase64: z.string().min(16).max(4_000_000),
+      }))
+      .mutation(async ({ input }) => {
+        const buffer = Buffer.from(input.dataBase64, "base64");
+        if (buffer.length === 0 || buffer.length > 2 * 1024 * 1024) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Brand images must be smaller than 2 MB",
+          });
+        }
+        const extension = {
+          "image/jpeg": "jpg",
+          "image/png": "png",
+          "image/webp": "webp",
+          "image/gif": "gif",
+        }[input.mimeType];
+        return storagePut(
+          `cms/branding/${Date.now()}-${input.filename.replace(/[^a-z0-9._-]/gi, "-")}.${extension}`,
+          buffer,
+          input.mimeType,
+        );
+      }),
   }),
 
   audit: router({

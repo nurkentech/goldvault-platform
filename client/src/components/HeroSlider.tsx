@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowRight, TrendingUp, Shield, Zap, ChevronLeft, ChevronRight } from "lucide-react";
 import { useLocation } from "wouter";
+import { trpc } from "@/lib/trpc";
 
 const slides = [
   {
@@ -75,6 +76,11 @@ export default function HeroSlider({ onGetStarted }: HeroSliderProps) {
   const [current, setCurrent] = useState(0);
   const [direction, setDirection] = useState(1);
   const [, navigate] = useLocation();
+  const { data: website } = trpc.content.website.useQuery(undefined, {
+    staleTime: 60_000,
+    retry: false,
+  });
+  const managedHome = website?.home;
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -89,7 +95,17 @@ export default function HeroSlider({ onGetStarted }: HeroSliderProps) {
     setCurrent(idx);
   };
 
-  const slide = slides[current];
+  const slide = current === 0 && managedHome
+    ? {
+        ...slides[0],
+        badge: managedHome.badge,
+        title: managedHome.title,
+        titleGold: managedHome.titleAccent,
+        subtitle: managedHome.subtitle,
+        cta1: managedHome.primaryCtaLabel,
+        cta2: managedHome.secondaryCtaLabel,
+      }
+    : slides[current];
 
   const variants = {
     enter: (dir: number) => ({ x: dir > 0 ? 60 : -60, opacity: 0 }),
@@ -104,7 +120,7 @@ export default function HeroSlider({ onGetStarted }: HeroSliderProps) {
       {/* Hero background image */}
       <div className="absolute inset-0 z-0"
         style={{
-          backgroundImage: "url('/manus-storage/hero-bg_ff436ad1.jpg')",
+          backgroundImage: `url('${managedHome?.heroImageUrl || "/manus-storage/hero-bg_ff436ad1.jpg"}')`,
           backgroundSize: "cover",
           backgroundPosition: "center",
           backgroundRepeat: "no-repeat",
@@ -222,7 +238,11 @@ export default function HeroSlider({ onGetStarted }: HeroSliderProps) {
                 <ArrowRight className="w-4 h-4" />
               </button>
               <button
-                onClick={() => navigate(CTA2_ROUTES[slide.cta2] ?? "/")}
+                onClick={() => navigate(
+                  current === 0 && managedHome
+                    ? managedHome.secondaryCtaUrl
+                    : CTA2_ROUTES[slide.cta2] ?? "/",
+                )}
                 className="flex items-center gap-2 px-7 py-3.5 rounded-xl border border-white/20 text-white font-semibold text-base hover:bg-white/8 hover:border-white/30 transition-all active:scale-[0.97]"
               >
                 {slide.cta2}

@@ -2,6 +2,42 @@ import { eq } from "drizzle-orm";
 import { platformSettings } from "../drizzle/schema";
 import { getDb } from "./db";
 
+export interface WebsitePageInput {
+  id: string;
+  slug: string;
+  title: string;
+  excerpt: string;
+  body: string;
+  seoTitle: string;
+  seoDescription: string;
+  status: "draft" | "published";
+  showInNavigation: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+  publishedAt: string | null;
+}
+
+export interface WebsiteContentInput {
+  branding: {
+    siteName: string;
+    tagline: string;
+    logoUrl: string;
+    logoAlt: string;
+  };
+  home: {
+    badge: string;
+    title: string;
+    titleAccent: string;
+    subtitle: string;
+    primaryCtaLabel: string;
+    secondaryCtaLabel: string;
+    secondaryCtaUrl: string;
+    heroImageUrl: string;
+  };
+  pages: WebsitePageInput[];
+}
+
 export interface PlatformSettingsInput {
   general: {
     platformName: string;
@@ -35,7 +71,29 @@ export interface PlatformSettingsInput {
   supportedAssets: string[];
   depositAddresses: Record<string, string>;
   compliance: { largeTransactionThreshold: string; rapidWithdrawalCount: number; rapidWithdrawalWindowMinutes: number };
+  website: WebsiteContentInput;
 }
+
+export const DEFAULT_WEBSITE_CONTENT: WebsiteContentInput = {
+  branding: {
+    siteName: "GoldVaults",
+    tagline: "Global Financial Freedom",
+    logoUrl: "",
+    logoAlt: "GoldVaults logo",
+  },
+  home: {
+    badge: "The Gold Standard of Crypto Investing",
+    title: "Buy Physical Gold",
+    titleAccent: "With Crypto",
+    subtitle:
+      "Convert Bitcoin, Ethereum, USDT and 300+ cryptocurrencies into real, audited, vault-stored gold bars.",
+    primaryCtaLabel: "Buy Gold Now",
+    secondaryCtaLabel: "View Gold Prices",
+    secondaryCtaUrl: "/markets",
+    heroImageUrl: "/manus-storage/hero-bg_ff436ad1.jpg",
+  },
+  pages: [],
+};
 
 export const DEFAULT_PLATFORM_SETTINGS: PlatformSettingsInput = {
   general: {
@@ -75,6 +133,7 @@ export const DEFAULT_PLATFORM_SETTINGS: PlatformSettingsInput = {
   supportedAssets: ["BTC", "ETH", "USDT", "USDC", "SOL", "GVT", "PAXG", "XAUT"],
   depositAddresses: {},
   compliance: { largeTransactionThreshold: "10000", rapidWithdrawalCount: 3, rapidWithdrawalWindowMinutes: 60 },
+  website: DEFAULT_WEBSITE_CONTENT,
 };
 
 function mergeSettings(settings: unknown): PlatformSettingsInput {
@@ -88,6 +147,21 @@ function mergeSettings(settings: unknown): PlatformSettingsInput {
     notifications: { ...DEFAULT_PLATFORM_SETTINGS.notifications, ...stored?.notifications },
     maintenance: { ...DEFAULT_PLATFORM_SETTINGS.maintenance, ...stored?.maintenance },
     compliance: { ...DEFAULT_PLATFORM_SETTINGS.compliance, ...stored?.compliance },
+    website: {
+      ...DEFAULT_WEBSITE_CONTENT,
+      ...stored?.website,
+      branding: {
+        ...DEFAULT_WEBSITE_CONTENT.branding,
+        ...stored?.website?.branding,
+      },
+      home: {
+        ...DEFAULT_WEBSITE_CONTENT.home,
+        ...stored?.website?.home,
+      },
+      pages: Array.isArray(stored?.website?.pages)
+        ? stored.website.pages
+        : DEFAULT_WEBSITE_CONTENT.pages,
+    },
     supportedAssets: Array.isArray(stored?.supportedAssets)
       ? stored.supportedAssets
       : DEFAULT_PLATFORM_SETTINGS.supportedAssets,

@@ -27,6 +27,7 @@ import { getClientIp } from "./loginRateLimit";
 import { userTwoFactorRouter, verifyUserSecondFactor } from "./userTwoFactor";
 import { hashPassword } from "./adminAuth";
 import { aiCopilotRouter } from "./aiCopilot";
+import { getPublishedWebsitePage, getPublicWebsiteContent } from "./cms";
 import {
   clearAllNotifications, claimChallengeReward, createAddressBookEntry,
   createMintingRecord, createNfcCard, createNotification, createPriceAlert,
@@ -63,6 +64,14 @@ export const appRouter = router({
   market: router({
     prices: publicProcedure.query(async () => getLiveMarketPrices()),
     fiatRates: publicProcedure.query(async () => getFiatRates()),
+  }),
+  content: router({
+    website: publicProcedure.query(() => getPublicWebsiteContent()),
+    pageBySlug: publicProcedure
+      .input(z.object({
+        slug: z.string().trim().toLowerCase().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+      }))
+      .query(({ input }) => getPublishedWebsitePage(input.slug)),
   }),
   platform: router({
     depositAddresses: protectedProcedure.query(async () => {
