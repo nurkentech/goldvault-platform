@@ -9,6 +9,7 @@ on:
       - "package.json"
       - "patches/**"
       - "pnpm-lock.yaml"
+      - "scripts/prepare-release-directory.sh"
       - "scripts/start-production.mjs"
   workflow_dispatch:
 
@@ -93,6 +94,15 @@ jobs:
           printf '%s\n' "${SSH_PRIVATE_KEY}" > "${HOME}/.ssh/id_ed25519"
           printf '%s\n' "${SSH_KNOWN_HOSTS}" > "${HOME}/.ssh/known_hosts"
           chmod 600 "${HOME}/.ssh/id_ed25519" "${HOME}/.ssh/known_hosts"
+
+      - name: Prepare release directory
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -p "${DEPLOY_PORT}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            bash -s -- "${APP_ROOT}" "${GITHUB_SHA}" \
+            < scripts/prepare-release-directory.sh
 
       - name: Upload release
         if: github.event_name == 'workflow_dispatch'
