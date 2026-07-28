@@ -36,7 +36,7 @@ const COUNTRY_CODES = [
   { code: "+971", flag: "🇦🇪", name: "UAE" },
 ];
 
-export default function SignUpModal({ isOpen, onClose, initialMode = "signup", successPath = "/profile" }: SignUpModalProps) {
+export default function SignUpModal({ isOpen, onClose, initialMode = "signup", successPath = "/dashboard" }: SignUpModalProps) {
   const [mode, setMode] = useState<"signup" | "login">(initialMode);
   const [step, setStep] = useState<Step>("method");
   const [authMethod, setAuthMethod] = useState<AuthMethod>("email");
@@ -59,6 +59,14 @@ export default function SignUpModal({ isOpen, onClose, initialMode = "signup", s
   const utils = trpc.useUtils();
 
   const identifier = authMethod === "email" ? email : `${countryCode}${phone}`;
+
+  async function requireAuthenticatedSession() {
+    await utils.auth.me.invalidate();
+    const authenticatedUser = await utils.auth.me.fetch();
+    if (!authenticatedUser) {
+      throw new Error("Your verification succeeded, but the secure session could not be established. Please request a new code and try again.");
+    }
+  }
 
   function validateEmail(val: string) {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val);
@@ -139,11 +147,10 @@ export default function SignUpModal({ isOpen, onClose, initialMode = "signup", s
 
     try {
       await verifyOtpMutation.mutateAsync({ identifier, code });
+      await requireAuthenticatedSession();
       if (mode === "signup") {
-        await utils.auth.me.invalidate();
         setStep("profile");
       } else {
-        await utils.auth.me.invalidate();
         toast.success("Signed in successfully!", { description: "Welcome back to GoldVaults.us" });
         handleClose();
         navigate(successPath);

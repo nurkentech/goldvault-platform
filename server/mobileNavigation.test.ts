@@ -10,6 +10,14 @@ const dashboardLayout = readFileSync(
   resolve(process.cwd(), "client/src/components/UserDashboardLayout.tsx"),
   "utf8",
 );
+const languageSwitcher = readFileSync(
+  resolve(process.cwd(), "client/src/components/LanguageSwitcher.tsx"),
+  "utf8",
+);
+const home = readFileSync(
+  resolve(process.cwd(), "client/src/pages/Home.tsx"),
+  "utf8",
+);
 
 describe("responsive mobile navigation", () => {
   it("keeps the public menu within the viewport and exposes expandable submenus", () => {
@@ -25,5 +33,11 @@ describe("responsive mobile navigation", () => {
     expect(dashboardLayout).toContain("sidebarOpen || mobileMenuOpen");
     expect(dashboardLayout).toContain('aria-label="Close navigation menu"');
     expect(dashboardLayout).toContain("setMobileMenuOpen(false)");
+  });
+
+  it("keeps the global language control away from the homepage menu button", () => {
+    expect(languageSwitcher).toContain('location === "/"');
+    expect(languageSwitcher).toContain("top-20 z-40");
+    expect(home).toContain('useState("/dashboard")');
   });
 });

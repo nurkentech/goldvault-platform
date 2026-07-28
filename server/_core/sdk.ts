@@ -28,6 +28,11 @@ export type SessionPayload = {
 const EXCHANGE_TOKEN_PATH = `/webdev.v1.WebDevAuthPublicService/ExchangeToken`;
 const GET_USER_INFO_PATH = `/webdev.v1.WebDevAuthPublicService/GetUserInfo`;
 const GET_USER_INFO_WITH_JWT_PATH = `/webdev.v1.WebDevAuthPublicService/GetUserInfoWithJwt`;
+const LOCAL_SESSION_APP_ID = "goldvault-platform";
+
+export function getSessionAppId(configuredAppId: string): string {
+  return configuredAppId || LOCAL_SESSION_APP_ID;
+}
 
 class OAuthService {
   constructor(private client: ReturnType<typeof axios.create>) {
@@ -172,7 +177,9 @@ class SDKServer {
     return this.signSession(
       {
         openId,
-        appId: ENV.appId,
+        // OTP authentication is local to this application and must not depend
+        // on optional external OAuth configuration.
+        appId: getSessionAppId(ENV.appId),
         name: options.name || "",
       },
       options
