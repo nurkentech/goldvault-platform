@@ -40,6 +40,16 @@ async function startServer() {
   // browser-facing HTTPS connection.
   app.set("trust proxy", 1);
   const server = createServer(app);
+  // Keep the deployment probe independent of authentication, the database,
+  // body parsing, and the client bundle. Namecheap/LiteSpeed can then verify
+  // that Passenger has loaded this exact Express application.
+  app.get("/healthz", (_req, res) => {
+    res
+      .status(200)
+      .set("Cache-Control", "no-store")
+      .type("text/plain")
+      .send("ok");
+  });
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
