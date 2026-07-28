@@ -12,7 +12,7 @@ import { motion } from "framer-motion";
 import {
   ArrowDownToLine, ArrowUpFromLine, ArrowLeftRight, TrendingUp,
   Bitcoin, CreditCard, Users, MoreHorizontal, CheckCircle2,
-  Clock, Shield, Eye, EyeOff, Coins, ShoppingCart
+  Clock, Shield, Eye, EyeOff, Coins, ShoppingCart, AlertTriangle, RefreshCw
 } from "lucide-react";
 import { useCurrency } from "@/lib/currency";
 
@@ -57,12 +57,40 @@ function DashboardContent() {
   const [chartPeriod, setChartPeriod] = useState<"1W" | "1M" | "3M" | "1Y">("1M");
 
   // Fetch wallet data
-  const { data: wallets, isLoading: walletsLoading } = trpc.wallet.list.useQuery();
-  const { data: transactions, isLoading: transactionsLoading } = trpc.transaction.list.useQuery({ limit: 5 });
-  const { data: investments = [], isLoading: investmentsLoading } = trpc.investment.list.useQuery();
-  const { data: marketPrices = [], isLoading: pricesLoading } = trpc.market.prices.useQuery(undefined, {
+  const walletsQuery = trpc.wallet.list.useQuery(undefined, { retry: false });
+  const transactionsQuery = trpc.transaction.list.useQuery(
+    { limit: 5 },
+    { retry: false },
+  );
+  const investmentsQuery = trpc.investment.list.useQuery(undefined, { retry: false });
+  const pricesQuery = trpc.market.prices.useQuery(undefined, {
     refetchInterval: 30_000,
+    retry: false,
   });
+  const wallets = walletsQuery.data;
+  const transactions = transactionsQuery.data;
+  const investments = investmentsQuery.data ?? [];
+  const marketPrices = pricesQuery.data ?? [];
+  const accountDataLoading =
+    walletsQuery.isLoading ||
+    transactionsQuery.isLoading ||
+    investmentsQuery.isLoading;
+  const accountDataError =
+    walletsQuery.isError ||
+    transactionsQuery.isError ||
+    investmentsQuery.isError;
+  const [loadingTimedOut, setLoadingTimedOut] = useState(false);
+  const [loadingAttempt, setLoadingAttempt] = useState(0);
+
+  useEffect(() => {
+    if (!accountDataLoading) {
+      setLoadingTimedOut(false);
+      return;
+    }
+
+    const timeout = window.setTimeout(() => setLoadingTimedOut(true), 12_000);
+    return () => window.clearTimeout(timeout);
+  }, [accountDataLoading, loadingAttempt]);
 
   const priceFor = (currency: string) => {
     if (currency === "USD") return 1;
@@ -101,9 +129,20 @@ function DashboardContent() {
       }))
       .filter((asset) => asset.value > 0) ?? [];
 
-  if (walletsLoading || transactionsLoading || investmentsLoading || pricesLoading) {
+  if (accountDataLoading && !loadingTimedOut) {
     return <DashboardDataSkeleton />;
   }
+
+  const retryDashboardData = () => {
+    setLoadingTimedOut(false);
+    setLoadingAttempt((attempt) => attempt + 1);
+    void Promise.all([
+      walletsQuery.refetch(),
+      transactionsQuery.refetch(),
+      investmentsQuery.refetch(),
+      pricesQuery.refetch(),
+    ]);
+  };
 
   const quickActions = [
     { label: "Deposit", icon: ArrowDownToLine, path: "/dashboard/deposit", color: "from-emerald-500 to-emerald-600" },
@@ -119,6 +158,35 @@ function DashboardContent() {
 
   return (
     <div className="space-y-6">
+      {(accountDataError || loadingTimedOut || pricesQuery.isError) && (
+        <div
+          role="status"
+          className="flex flex-col gap-3 rounded-2xl border border-amber-500/25 bg-amber-500/10 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between"
+        >
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
+            <div>
+              <p className="font-medium text-foreground">
+                {accountDataError || loadingTimedOut
+                  ? "Some account data could not be loaded."
+                  : "Live market prices are temporarily unavailable."}
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                The dashboard remains available. Retry to refresh the missing information.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={retryDashboardData}
+            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-amber-500/30 px-3 py-2 text-xs font-semibold text-amber-400 transition-colors hover:bg-amber-500/10"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            Retry
+          </button>
+        </div>
+      )}
+
       {/* Welcome Header */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
