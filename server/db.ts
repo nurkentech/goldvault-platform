@@ -148,10 +148,14 @@ export async function initDefaultWallets(userId: number) {
   const db = await getDb();
   if (!db) return;
   const currencies = ["BTC", "ETH", "SOL", "GOLD", "USDC", "GVT", "PAXG", "XAUT"];
-  for (const currency of currencies) {
-    const existing = await db.select().from(wallets).where(and(eq(wallets.userId, userId), eq(wallets.currency, currency))).limit(1);
-    if (existing.length === 0) await db.insert(wallets).values({ userId, currency, balance: "0" });
-  }
+  await db
+    .insert(wallets)
+    .values(currencies.map((currency) => ({ userId, currency, balance: "0" })))
+    .onDuplicateKeyUpdate({
+      // Keep an existing wallet untouched while allowing the whole default set
+      // to be initialized in one round trip.
+      set: { balance: sql`${wallets.balance}` },
+    });
 }
 
 // ─── Transactions ─────────────────────────────────────────────────────────────
