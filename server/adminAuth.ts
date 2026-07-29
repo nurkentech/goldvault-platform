@@ -14,6 +14,7 @@ import {
   clearLoginAttempts,
   recordFailedLogin,
 } from "./loginRateLimit";
+import { normalizeAdminRecoveryCodes } from "./recoveryCodes";
 
 const ADMIN_JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || "admin-secret-key");
 const ADMIN_COOKIE_NAME = "admin_session";
@@ -208,8 +209,8 @@ export const adminAuthRouter = router({
         throw new TRPCError({ code: "UNAUTHORIZED", message: "Admin not found" });
       }
 
-      const codes = admin.recoveryCodes as { code: string; used: boolean }[] | null;
-      if (!codes || codes.length === 0) {
+      const codes = normalizeAdminRecoveryCodes(admin.recoveryCodes);
+      if (codes.length === 0) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "No recovery codes configured" });
       }
 
@@ -272,8 +273,8 @@ export const adminAuthRouter = router({
     if (!admin) return null;
 
     // Return recovery code count (not the actual codes)
-    const codes = admin.recoveryCodes as { code: string; used: boolean }[] | null;
-    const recoveryCodesRemaining = codes ? codes.filter((c) => !c.used).length : 0;
+    const codes = normalizeAdminRecoveryCodes(admin.recoveryCodes);
+    const recoveryCodesRemaining = codes.filter((c) => !c.used).length;
 
     return {
       id: admin.id,
