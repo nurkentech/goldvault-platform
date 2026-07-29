@@ -589,6 +589,7 @@ export const appRouter = router({
 
         return {
           success: true,
+          requiresTwoFactor: !session.twoFactorVerifiedAt,
           user: {
             id: user.id,
             email: user.email,

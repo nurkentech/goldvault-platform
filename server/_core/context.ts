@@ -46,7 +46,7 @@ export async function createContext(
     const adminToken = (opts.req as any).cookies?.[ADMIN_COOKIE_NAME];
     if (adminToken) {
       const payload = await verifyAdminToken(adminToken);
-      if (payload) {
+      if (payload?.isAdmin && !payload.pre2fa) {
         adminSession = { adminId: payload.adminId, username: payload.username };
       }
     }

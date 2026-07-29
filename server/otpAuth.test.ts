@@ -68,7 +68,11 @@ describe("OTP authentication", () => {
     vi.spyOn(sdk, "createSessionToken").mockResolvedValue("signed-session-token");
     const createUserSession = vi
       .spyOn(sessions, "createUserSession")
-      .mockResolvedValue({ id: "session-id", recognized: false } as never);
+      .mockResolvedValue({
+        id: "session-id",
+        recognized: false,
+        twoFactorVerifiedAt: new Date(),
+      } as never);
 
     const { ctx, cookies } = createPublicContext();
     const caller = appRouter.createCaller(ctx);
@@ -78,6 +82,7 @@ describe("OTP authentication", () => {
     });
 
     expect(result.success).toBe(true);
+    expect(result.requiresTwoFactor).toBe(false);
     expect(result.user.id).toBe(user.id);
     expect(upsertUser).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -103,6 +108,33 @@ describe("OTP authentication", () => {
         path: "/",
         maxAge: ONE_YEAR_MS,
       },
+    });
+  });
+
+  it("returns a pending 2FA state instead of treating the session as authenticated", async () => {
+    vi.spyOn(emailOtp, "verifyOtp").mockResolvedValue({
+      valid: true,
+      method: "email",
+    });
+    vi.spyOn(db, "getUserByVerifiedIdentifier").mockResolvedValue(user);
+    vi.spyOn(db, "upsertUser").mockResolvedValue();
+    vi.spyOn(db, "getUserByOpenId").mockResolvedValue(user);
+    vi.spyOn(sdk, "createSessionToken").mockResolvedValue("pending-session-token");
+    vi.spyOn(sessions, "createUserSession").mockResolvedValue({
+      id: "pending-session-id",
+      recognized: true,
+      twoFactorVerifiedAt: null,
+    } as never);
+
+    const { ctx } = createPublicContext();
+    const result = await appRouter.createCaller(ctx).otp.verify({
+      identifier: "person@example.com",
+      code: "123456",
+    });
+
+    expect(result).toMatchObject({
+      success: true,
+      requiresTwoFactor: true,
     });
   });
 });
