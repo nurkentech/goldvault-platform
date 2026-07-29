@@ -144,18 +144,52 @@ export async function getUserWallets(userId: number) {
   return db.select().from(wallets).where(eq(wallets.userId, userId));
 }
 
+const DEFAULT_WALLET_CURRENCIES = [
+  "BTC",
+  "ETH",
+  "SOL",
+  "GOLD",
+  "USDC",
+  "GVT",
+  "PAXG",
+  "XAUT",
+] as const;
+
 export async function initDefaultWallets(userId: number) {
   const db = await getDb();
   if (!db) return;
-  const currencies = ["BTC", "ETH", "SOL", "GOLD", "USDC", "GVT", "PAXG", "XAUT"];
   await db
     .insert(wallets)
-    .values(currencies.map((currency) => ({ userId, currency, balance: "0" })))
+    .values(DEFAULT_WALLET_CURRENCIES.map((currency) => ({ userId, currency, balance: "0" })))
     .onDuplicateKeyUpdate({
       // Keep an existing wallet untouched while allowing the whole default set
       // to be initialized in one round trip.
       set: { balance: sql`${wallets.balance}` },
     });
+}
+
+export async function getOrInitUserWallets(userId: number) {
+  const existing = await getUserWallets(userId);
+  const existingCurrencies = new Set(existing.map((wallet) => wallet.currency));
+  const missingCurrencies = DEFAULT_WALLET_CURRENCIES.filter(
+    (currency) => !existingCurrencies.has(currency),
+  );
+
+  if (missingCurrencies.length === 0) return existing;
+
+  const db = await getDb();
+  if (!db) return existing;
+  await db
+    .insert(wallets)
+    .values(missingCurrencies.map((currency) => ({
+      userId,
+      currency,
+      balance: "0",
+    })))
+    .onDuplicateKeyUpdate({
+      set: { balance: sql`${wallets.balance}` },
+    });
+  return getUserWallets(userId);
 }
 
 // ─── Transactions ─────────────────────────────────────────────────────────────

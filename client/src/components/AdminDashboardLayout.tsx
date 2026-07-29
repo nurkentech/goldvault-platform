@@ -83,7 +83,9 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
     }
   }, [isFetching, isLoading, adminUser, navigate]);
 
-  if (isLoading || isFetching) return <AdminSkeleton />;
+  // Keep rendering an already authenticated admin while React Query performs
+  // a background session refresh during navigation between admin pages.
+  if ((isLoading || isFetching) && !adminUser) return <AdminSkeleton />;
   if (!adminUser) return <AdminSkeleton />;
 
   return (

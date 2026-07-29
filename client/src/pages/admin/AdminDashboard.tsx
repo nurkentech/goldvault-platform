@@ -1,8 +1,9 @@
 import { trpc } from "@/lib/trpc";
+import { useEffect, useState } from "react";
 import {
   Users, DollarSign, TrendingUp, Wallet, ShieldCheck,
   Clock, ArrowUpRight, ArrowDownRight, Activity,
-  AlertTriangle, CheckCircle2, Server, Zap, BarChart3,
+  AlertTriangle, CheckCircle2, Server, Zap, BarChart3, RefreshCw,
 } from "lucide-react";
 
 function StatCard({ title, value, icon: Icon, change, changeType, color }: {
@@ -86,11 +87,24 @@ function MiniLineChart({ data, color, height = 120 }: { data: number[]; color: s
 }
 
 export default function AdminDashboard() {
-  const { data: stats, isLoading } = trpc.admin.stats.useQuery();
-  const { data: activity } = trpc.admin.activity.useQuery({ limit: 10 });
-  const { data: growth } = trpc.admin.userGrowth.useQuery();
+  const statsQuery = trpc.admin.stats.useQuery(undefined, { retry: 1 });
+  const activityQuery = trpc.admin.activity.useQuery({ limit: 10 }, { retry: 1 });
+  const growthQuery = trpc.admin.userGrowth.useQuery(undefined, { retry: 1 });
+  const { data: stats, isLoading } = statsQuery;
+  const activity = activityQuery.data;
+  const growth = growthQuery.data;
+  const [loadingTimedOut, setLoadingTimedOut] = useState(false);
 
-  if (isLoading) {
+  useEffect(() => {
+    if (!isLoading) {
+      setLoadingTimedOut(false);
+      return;
+    }
+    const timeout = window.setTimeout(() => setLoadingTimedOut(true), 12_000);
+    return () => window.clearTimeout(timeout);
+  }, [isLoading]);
+
+  if (isLoading && !loadingTimedOut) {
     return (
       <div className="space-y-6">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -101,6 +115,20 @@ export default function AdminDashboard() {
       </div>
     );
   }
+
+  const hasDataError =
+    loadingTimedOut ||
+    statsQuery.isError ||
+    activityQuery.isError ||
+    growthQuery.isError;
+  const retryDashboard = () => {
+    setLoadingTimedOut(false);
+    void Promise.all([
+      statsQuery.refetch(),
+      activityQuery.refetch(),
+      growthQuery.refetch(),
+    ]);
+  };
 
   const formatCurrency = (val: string | number) => {
     const num = Number(val);
@@ -133,6 +161,27 @@ export default function AdminDashboard() {
         <h1 className="text-2xl font-bold text-white">Admin Dashboard</h1>
         <p className="text-sm text-gray-400 mt-1">Platform overview and key metrics</p>
       </div>
+
+      {hasDataError && (
+        <div className="flex flex-col gap-3 rounded-xl border border-amber-500/25 bg-amber-500/10 p-4 text-sm sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
+            <div>
+              <p className="font-medium text-amber-100">Some dashboard data could not be loaded.</p>
+              <p className="mt-1 text-xs text-gray-400">
+                Available sections remain visible while the missing data is retried.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={retryDashboard}
+            className="inline-flex items-center justify-center gap-2 rounded-lg border border-amber-400/30 px-3 py-2 text-xs font-medium text-amber-100 hover:bg-amber-500/10"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            Retry
+          </button>
+        </div>
+      )}
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

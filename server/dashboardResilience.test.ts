@@ -23,8 +23,10 @@ describe("dashboard loading resilience", () => {
     expect(dashboard).toContain("setLoadingAttempt((attempt) => attempt + 1)");
   });
 
-  it("initializes all default wallets in one idempotent database statement", () => {
-    expect(database).toContain(".values(currencies.map");
+  it("only initializes missing wallets and leaves established dashboards read-only", () => {
+    expect(database).toContain("export async function getOrInitUserWallets");
+    expect(database).toContain("if (missingCurrencies.length === 0) return existing");
+    expect(database).toContain(".values(missingCurrencies.map");
     expect(database).toContain(".onDuplicateKeyUpdate");
   });
 });

@@ -35,8 +35,9 @@ import {
   getActiveChallenges, getCommunityFeed, getLeaderboard, getUserAddressBook,
   getUserById, getUserByOpenId, getUserByVerifiedIdentifier,
   getUserChallengeProgress, getUserMintingHistory, getUserNfcCards,
-  getUserNotifications, getUserPriceAlerts, getUserTransactions, getUserWallets,
-  initDefaultWallets, markAllNotificationsRead, markNotificationRead, sendChatMessage,
+  getOrInitUserWallets, getUserNotifications, getUserPriceAlerts,
+  getUserTransactions, getUserWallets, markAllNotificationsRead,
+  markNotificationRead, sendChatMessage,
   toggle2FA, updateAddressBookEntry, updateNfcCard, updateNotifPrefs, updateUserGoldCoins,
   updateUserProfile, upsertUser,
 } from "./db";
@@ -170,10 +171,7 @@ export const appRouter = router({
     dashboard: protectedProcedure.query(({ ctx }) => getReferralDashboard(ctx.user.id)),
   }),
   wallet: router({
-    list: protectedProcedure.query(async ({ ctx }) => {
-      await initDefaultWallets(ctx.user.id);
-      return getUserWallets(ctx.user.id);
-    }),
+    list: protectedProcedure.query(({ ctx }) => getOrInitUserWallets(ctx.user.id)),
     goldCoins: protectedProcedure.query(async ({ ctx }) => {
       const user = await getUserById(ctx.user.id);
       return { goldCoins: user?.goldCoins ?? 0 };
