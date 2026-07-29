@@ -67,16 +67,23 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
   const [mobileOpen, setMobileOpen] = useState(false);
 
   // Check admin session
-  const { data: adminUser, isLoading } = trpc.adminAuth.me.useQuery();
+  const {
+    data: adminUser,
+    isLoading,
+    isFetching,
+  } = trpc.adminAuth.me.useQuery(undefined, {
+    retry: false,
+    refetchOnMount: "always",
+  });
 
   // Redirect to login if not authenticated
   useEffect(() => {
-    if (!isLoading && !adminUser) {
+    if (!isLoading && !isFetching && !adminUser) {
       navigate("/admin/login");
     }
-  }, [isLoading, adminUser, navigate]);
+  }, [isFetching, isLoading, adminUser, navigate]);
 
-  if (isLoading) return <AdminSkeleton />;
+  if (isLoading || isFetching) return <AdminSkeleton />;
   if (!adminUser) return <AdminSkeleton />;
 
   return (

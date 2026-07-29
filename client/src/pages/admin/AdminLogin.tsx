@@ -6,6 +6,7 @@ import { toast } from "sonner";
 
 export default function AdminLogin() {
   const [, navigate] = useLocation();
+  const utils = trpc.useUtils();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -20,15 +21,25 @@ export default function AdminLogin() {
   const [useRecoveryCode, setUseRecoveryCode] = useState(false);
   const [recoveryCode, setRecoveryCode] = useState("");
 
+  const finishLogin = async () => {
+    await utils.adminAuth.me.invalidate();
+    const admin = await utils.adminAuth.me.fetch();
+    if (!admin) {
+      toast.error("The secure admin session could not be loaded. Please try again.");
+      return;
+    }
+    toast.success("Login successful");
+    navigate("/admin");
+  };
+
   const loginMutation = trpc.adminAuth.login.useMutation({
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       if (data.requires2FA && data.pre2faToken) {
         setRequires2FA(true);
         setPre2faToken(data.pre2faToken);
         toast.info("Enter your 2FA code to continue");
       } else {
-        toast.success("Login successful");
-        navigate("/admin");
+        await finishLogin();
       }
     },
     onError: (err) => {
@@ -37,9 +48,8 @@ export default function AdminLogin() {
   });
 
   const verify2FAMutation = trpc.adminAuth.verify2FALogin.useMutation({
-    onSuccess: () => {
-      toast.success("Login successful");
-      navigate("/admin");
+    onSuccess: async () => {
+      await finishLogin();
     },
     onError: (err) => {
       toast.error(err.message || "Invalid 2FA code");
@@ -49,12 +59,11 @@ export default function AdminLogin() {
   });
 
   const verifyRecoveryMutation = trpc.adminAuth.verifyRecoveryCode.useMutation({
-    onSuccess: (data) => {
-      toast.success("Login successful");
+    onSuccess: async (data) => {
       if (data.remainingCodes !== undefined && data.remainingCodes <= 2) {
         toast.warning(`Only ${data.remainingCodes} recovery code(s) remaining. Please regenerate codes.`);
       }
-      navigate("/admin");
+      await finishLogin();
     },
     onError: (err) => {
       toast.error(err.message || "Invalid recovery code");

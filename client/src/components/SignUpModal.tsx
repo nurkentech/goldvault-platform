@@ -146,7 +146,17 @@ export default function SignUpModal({ isOpen, onClose, initialMode = "signup", s
     setErrors({});
 
     try {
-      await verifyOtpMutation.mutateAsync({ identifier, code });
+      const verification = await verifyOtpMutation.mutateAsync({
+        identifier,
+        code,
+      });
+      if (verification.requiresTwoFactor) {
+        await utils.auth.me.invalidate();
+        toast.info("Complete two-factor verification to continue");
+        handleClose();
+        navigate("/verify-2fa");
+        return;
+      }
       await requireAuthenticatedSession();
       if (mode === "signup") {
         setStep("profile");
