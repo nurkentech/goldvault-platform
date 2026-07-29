@@ -15,12 +15,21 @@ export async function getPlatformStats() {
   const db = await getDb();
   if (!db) return { totalUsers: 0, totalDeposits: "0", totalWithdrawals: "0", activeInvestments: 0, revenue: "0", pendingKyc: 0, pendingWithdrawals: 0 };
 
-  const [userCount] = await db.select({ count: count() }).from(users);
-  const [depositSum] = await db.select({ total: sum(transactions.amount) }).from(transactions).where(eq(transactions.type, "deposit"));
-  const [withdrawalSum] = await db.select({ total: sum(transactions.amount) }).from(transactions).where(eq(transactions.type, "withdrawal"));
-  const [investCount] = await db.select({ count: count() }).from(transactions).where(sql`${transactions.type} = 'buy' AND ${transactions.status} = 'confirmed'`);
-  const [pendingKyc] = await db.select({ count: count() }).from(users).where(eq(users.kycStatus, "pending"));
-  const [pendingWithdrawals] = await db.select({ count: count() }).from(transactions).where(sql`${transactions.type} = 'withdrawal' AND ${transactions.status} = 'pending'`);
+  const [
+    [userCount],
+    [depositSum],
+    [withdrawalSum],
+    [investCount],
+    [pendingKyc],
+    [pendingWithdrawals],
+  ] = await Promise.all([
+    db.select({ count: count() }).from(users),
+    db.select({ total: sum(transactions.amount) }).from(transactions).where(eq(transactions.type, "deposit")),
+    db.select({ total: sum(transactions.amount) }).from(transactions).where(eq(transactions.type, "withdrawal")),
+    db.select({ count: count() }).from(transactions).where(sql`${transactions.type} = 'buy' AND ${transactions.status} = 'confirmed'`),
+    db.select({ count: count() }).from(users).where(eq(users.kycStatus, "pending")),
+    db.select({ count: count() }).from(transactions).where(sql`${transactions.type} = 'withdrawal' AND ${transactions.status} = 'pending'`),
+  ]);
 
   return {
     totalUsers: userCount?.count ?? 0,
@@ -51,8 +60,31 @@ export async function getAllUsers(opts: { limit?: number; offset?: number; searc
 
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
-  const [totalResult] = await db.select({ count: count() }).from(users).where(whereClause);
-  const userList = await db.select().from(users).where(whereClause).orderBy(desc(users.createdAt)).limit(opts.limit ?? 50).offset(opts.offset ?? 0);
+  const [[totalResult], userList] = await Promise.all([
+    db.select({ count: count() }).from(users).where(whereClause),
+    db
+      .select({
+        id: users.id,
+        name: users.name,
+        username: users.username,
+        email: users.email,
+        avatarUrl: users.avatarUrl,
+        role: users.role,
+        goldCoins: users.goldCoins,
+        tier: users.tier,
+        totalPoints: users.totalPoints,
+        isOnline: users.isOnline,
+        kycStatus: users.kycStatus,
+        country: users.country,
+        createdAt: users.createdAt,
+        lastSignedIn: users.lastSignedIn,
+      })
+      .from(users)
+      .where(whereClause)
+      .orderBy(desc(users.createdAt))
+      .limit(opts.limit ?? 50)
+      .offset(opts.offset ?? 0),
+  ]);
 
   return { users: userList, total: totalResult?.count ?? 0 };
 }

@@ -295,12 +295,12 @@ class SDKServer {
     }
 
     const sessionUserId = session.openId;
-    const signedInAt = new Date();
     let user = await db.getUserByOpenId(sessionUserId);
 
     // If user not in DB, sync from OAuth server automatically
     if (!user) {
       try {
+        const signedInAt = new Date();
         const userInfo = await this.getUserInfoWithJwt(sessionToken ?? "");
         await db.upsertUser({
           openId: userInfo.openId,
@@ -323,11 +323,6 @@ class SDKServer {
     if (!sessionToken || !(await validateUserSession(user.id, sessionToken))) {
       throw ForbiddenError("Session has expired or was revoked");
     }
-
-    await db.upsertUser({
-      openId: user.openId,
-      lastSignedIn: signedInAt,
-    });
 
     return user;
   }

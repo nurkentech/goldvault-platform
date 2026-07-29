@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import {
   Search, ChevronLeft, ChevronRight, ShieldCheck, ShieldX,
   Crown, User, MoreVertical, Ban, UserCheck, Loader2,
-  DollarSign, X,
+  DollarSign, X, AlertTriangle, RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -139,6 +139,7 @@ function WalletDialog({ userId, userName, onClose, onSuccess }: { userId: number
 
 export default function AdminUsers() {
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
   const [kycFilter, setKycFilter] = useState("all");
   const [page, setPage] = useState(0);
@@ -147,11 +148,23 @@ export default function AdminUsers() {
   const [walletUser, setWalletUser] = useState<{ id: number; name: string } | null>(null);
   const limit = 20;
 
-  const { data, isLoading, refetch } = trpc.admin.users.list.useQuery({
-    limit, offset: page * limit, search: search || undefined,
+  useEffect(() => {
+    const timeout = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => window.clearTimeout(timeout);
+  }, [search]);
+
+  const {
+    data,
+    error,
+    isError,
+    isFetching,
+    isLoading,
+    refetch,
+  } = trpc.admin.users.list.useQuery({
+    limit, offset: page * limit, search: debouncedSearch || undefined,
     role: roleFilter !== "all" ? roleFilter : undefined,
     kycStatus: kycFilter !== "all" ? kycFilter : undefined,
-  });
+  }, { retry: 1 });
 
   const updateUser = trpc.admin.users.update.useMutation({
     onSuccess: () => { refetch(); toast.success("User updated"); setSelectedUser(null); },
@@ -212,7 +225,32 @@ export default function AdminUsers() {
           <h1 className="text-2xl font-bold text-white">User Management</h1>
           <p className="text-sm text-gray-400 mt-1">{data?.total ?? 0} total users</p>
         </div>
+        {isFetching && !isLoading && (
+          <span className="flex items-center gap-2 text-xs text-amber-400">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            Refreshing users
+          </span>
+        )}
       </div>
+
+      {isError && (
+        <div className="flex flex-col gap-3 rounded-xl border border-red-500/25 bg-red-500/10 p-4 text-sm sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
+            <div>
+              <p className="font-medium text-red-200">Users could not be loaded.</p>
+              <p className="mt-1 text-xs text-gray-400">{error.message}</p>
+            </div>
+          </div>
+          <button
+            onClick={() => void refetch()}
+            className="inline-flex items-center justify-center gap-2 rounded-lg border border-red-400/30 px-3 py-2 text-xs font-medium text-red-200 hover:bg-red-500/10"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            Retry
+          </button>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3">
@@ -271,6 +309,18 @@ export default function AdminUsers() {
                     <td colSpan={8} className="px-5 py-4"><div className="h-8 bg-gray-800/30 rounded animate-pulse" /></td>
                   </tr>
                 ))
+              ) : isError ? (
+                <tr>
+                  <td colSpan={8} className="px-5 py-10 text-center text-sm text-red-300">
+                    User data is unavailable. Use Retry above.
+                  </td>
+                </tr>
+              ) : (data?.users.length ?? 0) === 0 ? (
+                <tr>
+                  <td colSpan={8} className="px-5 py-10 text-center text-sm text-gray-500">
+                    No users match the current filters.
+                  </td>
+                </tr>
               ) : (
                 (data?.users ?? []).map((u: any) => (
                   <tr key={u.id} className="border-b border-gray-800/30 hover:bg-gray-800/20 transition-colors">
