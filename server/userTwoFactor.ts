@@ -9,6 +9,7 @@ import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { getDb, getUserById } from "./db";
 import { sendOtpSms, storeOtp, verifyOtp } from "./emailOtp";
 import { markSessionTwoFactorVerified } from "./userSessions";
+import { normalizeUserBackupCodes } from "./recoveryCodes";
 
 const ISSUER = "GoldVaults";
 const digest = (value: string) => crypto.createHash("sha256").update(value.trim().toUpperCase()).digest("hex");
@@ -34,7 +35,7 @@ export async function verifyUserSecondFactor(userId: number, code?: string) {
     if (sms.valid) return true;
   }
   const normalizedHash = digest(code);
-  const codes = user.twoFactorBackupCodes ?? [];
+  const codes = normalizeUserBackupCodes(user.twoFactorBackupCodes);
   const match = codes.find((entry) => !entry.used && crypto.timingSafeEqual(Buffer.from(entry.hash), Buffer.from(normalizedHash)));
   if (match) {
     await db.update(users).set({ twoFactorBackupCodes: codes.map((entry) => entry === match ? { ...entry, used: true } : entry) }).where(eq(users.id, userId));
@@ -60,7 +61,13 @@ export const userTwoFactorRouter = router({
   }),
   status: protectedProcedure.query(async ({ ctx }) => {
     const user = await getUserById(ctx.user.id);
-    return { enabled: user?.twoFactorEnabled ?? false, smsAvailable: Boolean(user?.phone), backupCodesRemaining: user?.twoFactorBackupCodes?.filter((code) => !code.used).length ?? 0 };
+    return {
+      enabled: user?.twoFactorEnabled ?? false,
+      smsAvailable: Boolean(user?.phone),
+      backupCodesRemaining: normalizeUserBackupCodes(
+        user?.twoFactorBackupCodes,
+      ).filter((code) => !code.used).length,
+    };
   }),
   setup: protectedProcedure.mutation(async ({ ctx }) => {
     const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
