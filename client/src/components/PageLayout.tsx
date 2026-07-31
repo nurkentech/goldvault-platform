@@ -1,5 +1,5 @@
 import { Link } from "wouter";
-import { ArrowLeft, Shield, Lock, CheckCircle } from "lucide-react";
+import { ArrowLeft, Shield, Lock, HeadphonesIcon, FileWarning } from "lucide-react";
 
 interface PageLayoutProps {
   children: React.ReactNode;
@@ -51,14 +51,13 @@ export default function PageLayout({ children, title, subtitle, badge, breadcrum
         {children}
       </main>
 
-      {/* Trust Footer Bar */}
+      {/* Account safety and support links */}
       <div className="border-t border-white/8 bg-slate-950 py-6">
         <div className="max-w-[1400px] mx-auto px-4 lg:px-6 flex flex-wrap items-center justify-center gap-6 text-xs text-slate-500">
-          <span className="flex items-center gap-1.5"><Shield className="w-3.5 h-3.5 text-amber-400" /> SEC Registered</span>
-          <span className="flex items-center gap-1.5"><Lock className="w-3.5 h-3.5 text-amber-400" /> ISO 27001 Certified</span>
-          <span className="flex items-center gap-1.5"><CheckCircle className="w-3.5 h-3.5 text-amber-400" /> 99.99% Pure Gold</span>
-          <span className="flex items-center gap-1.5"><Shield className="w-3.5 h-3.5 text-amber-400" /> $500M Insurance Fund</span>
-          <span className="flex items-center gap-1.5"><CheckCircle className="w-3.5 h-3.5 text-amber-400" /> FCA Authorized</span>
+          <span className="flex items-center gap-1.5"><Lock className="w-3.5 h-3.5 text-amber-400" /> Encrypted connection</span>
+          <Link href="/security" className="flex items-center gap-1.5 hover:text-amber-400"><Shield className="w-3.5 h-3.5 text-amber-400" /> Security controls</Link>
+          <Link href="/risk-disclosure" className="flex items-center gap-1.5 hover:text-amber-400"><FileWarning className="w-3.5 h-3.5 text-amber-400" /> Risk disclosure</Link>
+          <Link href="/contact" className="flex items-center gap-1.5 hover:text-amber-400"><HeadphonesIcon className="w-3.5 h-3.5 text-amber-400" /> Customer support</Link>
         </div>
       </div>
     </div>

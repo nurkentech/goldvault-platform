@@ -5,10 +5,11 @@
  */
 import { useState, useCallback, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Link } from "wouter";
 import {
   Wallet, ArrowUpRight, Bitcoin, Coins, DollarSign,
-  Shield, Pickaxe, MessageCircle, Gamepad2, Flame, CreditCard,
-  TrendingUp, BarChart3, ArrowRight
+  Pickaxe, MessageCircle, Gamepad2, Flame, CreditCard,
+  TrendingUp, ArrowRight
 } from "lucide-react";
 
 // Notification system
@@ -19,9 +20,6 @@ import NotificationBell from "@/components/NotificationBell";
 import AILiveRepresentative from "@/components/AILiveRepresentative";
 import FinancialDashboard from "@/components/FinancialDashboard";
 import PlatformFeatures from "@/components/PlatformFeatures";
-import TechnicalArchitecture from "@/components/TechnicalArchitecture";
-import TrustCredibility from "@/components/TrustCredibility";
-import FAQ from "@/components/FAQ";
 import GoldMiningPartners from "@/components/GoldMiningPartners";
 import WalletDashboard from "@/components/WalletDashboard";
 import ExchangeWithdrawal from "@/components/ExchangeWithdrawal";
@@ -41,7 +39,7 @@ import DualTicker from "@/components/DualTicker";
 import CryptoCards from "@/components/CryptoCards";
 import { TradingViewChart, CryptoConverter, FeaturedServices, WhyGoldVaults } from "@/components/TradingSection";
 import { MarketMovers, NewsSection, PriceHeatmap, TradingFeatures, SecuritySection } from "@/components/MarketSections";
-import { Testimonials, MobileApp, FAQSection, Newsletter, Footer } from "@/components/BottomSections";
+import { Testimonials, MobileApp, Newsletter, Footer } from "@/components/BottomSections";
 
 // ─── Tab card wrapper ─────────────────────────────────────────────────────────
 function TabCard({ children }: { children: React.ReactNode }) {
@@ -64,15 +62,27 @@ function PlatformDashboard({ onSignIn, onGetStarted }: { onSignIn: () => void; o
     { id: "send-btc", label: "Send BTC", icon: <Bitcoin className="w-3 h-3" /> },
     { id: "send-coins", label: "Send Coins", icon: <Coins className="w-3 h-3" /> },
     { id: "financials", label: "Financials", icon: <DollarSign className="w-3 h-3" /> },
-    { id: "trust", label: "Trust", icon: <Shield className="w-3 h-3" /> },
-    { id: "faq-platform", label: "FAQ", icon: null },
     { id: "mining", label: "Mining", icon: <Pickaxe className="w-3 h-3" /> },
     { id: "social", label: "Social", icon: <MessageCircle className="w-3 h-3" /> },
     { id: "challenges", label: "Challenges", icon: <Gamepad2 className="w-3 h-3" /> },
     { id: "minting", label: "Mint Gold", icon: <Flame className="w-3 h-3" /> },
     { id: "nfc-card", label: "Debit Card", icon: <CreditCard className="w-3 h-3" /> },
-    { id: "architecture", label: "Architecture", icon: <BarChart3 className="w-3 h-3" /> },
   ];
+
+  const toolActions: Record<string, { label: string; href: string; description: string }> = {
+    overview: { label: "Open account dashboard", href: "/dashboard", description: "Access the live tools and account data available to your profile." },
+    wallet: { label: "Open live wallets", href: "/dashboard/wallets", description: "View persisted balances, addresses, and wallet actions." },
+    exchange: { label: "Open live exchange", href: "/dashboard/exchange", description: "Use the authenticated exchange with your account wallets." },
+    "send-btc": { label: "Send from your account", href: "/dashboard/withdraw", description: "Open the secure withdrawal flow with balance and 2FA checks." },
+    "send-coins": { label: "Open wallet transfers", href: "/dashboard/wallets", description: "Manage GoldCoins and account wallet transfers." },
+    financials: { label: "View account financials", href: "/dashboard", description: "Review your real portfolio totals, transactions, and investments." },
+    mining: { label: "Open mining explorer", href: "/mining-partners", description: "Research mining companies and review available account investments." },
+    social: { label: "Open Social Hub", href: "/social", description: "Read real community posts or sign in to publish and earn rewards." },
+    challenges: { label: "Open account rewards", href: "/dashboard/rewards", description: "Track eligible challenges and claim completed rewards." },
+    minting: { label: "Open gold minting", href: "/mint", description: "Review minting requirements and your authenticated minting history." },
+    "nfc-card": { label: "Manage account cards", href: "/dashboard/cards", description: "Request and control eligible virtual or physical cards." },
+  };
+  const activeTool = toolActions[activeTab];
 
   return (
     <section id="platform" className="bg-slate-900 py-16">
@@ -117,6 +127,18 @@ function PlatformDashboard({ onSignIn, onGetStarted }: { onSignIn: () => void; o
             </TabsList>
           </div>
 
+          {activeTool && (
+            <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-white">Live tool available</p>
+                <p className="text-xs text-slate-300">{activeTool.description}</p>
+              </div>
+              <Link href={activeTool.href} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-bold text-slate-950 hover:bg-emerald-400">
+                {activeTool.label} <ArrowRight className="h-4 w-4" />
+              </Link>
+            </div>
+          )}
+
           {/* Tab contents */}
           <TabsContent value="overview" className="space-y-8">
             <PlatformFeatures />
@@ -131,14 +153,11 @@ function PlatformDashboard({ onSignIn, onGetStarted }: { onSignIn: () => void; o
             <div className="max-w-2xl mx-auto"><TabCard><GoldCoinsTransfer /></TabCard></div>
           </TabsContent>
           <TabsContent value="financials" className="space-y-12"><FinancialDashboard /></TabsContent>
-          <TabsContent value="trust" className="space-y-8"><TrustCredibility /></TabsContent>
-          <TabsContent value="faq-platform" className="space-y-8"><FAQ /></TabsContent>
           <TabsContent value="mining" className="space-y-8"><GoldMiningPartners /></TabsContent>
           <TabsContent value="social" className="space-y-8"><SocialHub /></TabsContent>
           <TabsContent value="challenges" className="space-y-8"><GameChallenges /></TabsContent>
           <TabsContent value="minting" className="space-y-8"><GoldMinting /></TabsContent>
           <TabsContent value="nfc-card" className="space-y-8"><NFCDebitCard /></TabsContent>
-          <TabsContent value="architecture" className="space-y-12"><TechnicalArchitecture /></TabsContent>
         </Tabs>
       </div>
     </section>
@@ -250,13 +269,10 @@ function HomeContent() {
       {/* 16. Mobile app */}
       <MobileApp />
 
-      {/* 17. FAQ */}
-      <FAQSection />
-
-      {/* 18. Newsletter */}
+      {/* 17. Newsletter */}
       <Newsletter />
 
-      {/* 19. Footer */}
+      {/* 18. Footer — includes the FAQ link */}
       <Footer />
 
       {/* Floating AI support */}

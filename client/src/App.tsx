@@ -18,7 +18,6 @@ import {
   ExchangePage,
   NFCCardPage,
   GoldCoinsPage,
-  MiningPartnersPage,
   VaultAuditsPage,
   BlogPage,
   CareersPage,
@@ -26,7 +25,6 @@ import {
   GoldVsBitcoinPage,
   ReferralPage,
   GoldPriceAlertsPage,
-  SocialHubPage,
   ChallengesPage,
   GoldETFPage,
   BitcoinWalletPage,
@@ -83,6 +81,7 @@ import AdminAICopilot from "./pages/admin/AdminAICopilot";
 import AdminContent from "./pages/admin/AdminContent";
 import ManagedPage from "./pages/ManagedPage";
 import Analytics from "./components/Analytics";
+import { CommunitySocialPage, MiningExplorerPage } from "./pages/PlatformToolPages";
 
 // Admin wrapper to apply layout
 function AdminPage({ component: Component }: { component: React.ComponentType }) {
@@ -112,7 +111,7 @@ function Router() {
 
       {/* Company */}
       <Route path="/about" component={About} />
-      <Route path="/mining-partners" component={MiningPartnersPage} />
+      <Route path="/mining-partners" component={MiningExplorerPage} />
       <Route path="/vault-audits" component={VaultAuditsPage} />
       <Route path="/security" component={SecurityPage} />
       <Route path="/careers" component={CareersPage} />
@@ -127,7 +126,7 @@ function Router() {
 
       {/* Platform Features */}
       <Route path="/trade" component={Trade} />
-      <Route path="/social" component={SocialHubPage} />
+      <Route path="/social" component={CommunitySocialPage} />
       <Route path="/challenges" component={ChallengesPage} />
       <Route path="/gold-etf" component={GoldETFPage} />
       <Route path="/bitcoin-wallet" component={BitcoinWalletPage} />
