@@ -106,9 +106,34 @@ export async function getPendingTwoFactorSession(token: string) {
   return account?.enabled ? session : null;
 }
 
-export async function markSessionTwoFactorVerified(token: string) {
-  const db = await getDb(); if (!db) return;
-  await db.update(userSessions).set({ twoFactorVerifiedAt: new Date() }).where(eq(userSessions.tokenHash, hashSessionToken(token)));
+export async function markSessionTwoFactorVerified(
+  token: string,
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const tokenHash = hashSessionToken(token);
+  await db
+    .update(userSessions)
+    .set({ twoFactorVerifiedAt: new Date() })
+    .where(
+      and(
+        eq(userSessions.tokenHash, tokenHash),
+        isNull(userSessions.revokedAt),
+        gt(userSessions.expiresAt, new Date()),
+      ),
+    );
+  const [session] = await db
+    .select({ twoFactorVerifiedAt: userSessions.twoFactorVerifiedAt })
+    .from(userSessions)
+    .where(
+      and(
+        eq(userSessions.tokenHash, tokenHash),
+        isNull(userSessions.revokedAt),
+        gt(userSessions.expiresAt, new Date()),
+      ),
+    )
+    .limit(1);
+  return Boolean(session?.twoFactorVerifiedAt);
 }
 
 export async function listUserSessions(userId: number, currentToken?: string) {

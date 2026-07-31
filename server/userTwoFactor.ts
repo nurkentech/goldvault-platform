@@ -49,7 +49,13 @@ export const userTwoFactorRouter = router({
   completeLogin: publicProcedure.input(z.object({ code: z.string().min(6).max(32) })).mutation(async ({ ctx, input }) => {
     if (!ctx.pendingTwoFactorUserId || !ctx.pendingTwoFactorToken) throw new TRPCError({ code: "UNAUTHORIZED", message: "No pending two-factor login" });
     await verifyUserSecondFactor(ctx.pendingTwoFactorUserId, input.code);
-    await markSessionTwoFactorVerified(ctx.pendingTwoFactorToken);
+    const sessionVerified = await markSessionTwoFactorVerified(ctx.pendingTwoFactorToken);
+    if (!sessionVerified) {
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Unable to complete secure session verification. Please sign in again.",
+      });
+    }
     return { success: true };
   }),
   sendLoginSms: publicProcedure.mutation(async ({ ctx }) => {
