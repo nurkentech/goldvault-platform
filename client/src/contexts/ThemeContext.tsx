@@ -1,8 +1,9 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
+import { normalizeThemePreference, ThemePreference } from "@/lib/preferences";
 
-export type ThemePreference = "light" | "dark" | "system";
+export type { ThemePreference } from "@/lib/preferences";
 type EffectiveTheme = "light" | "dark";
 
 interface ThemeContextType {
@@ -19,11 +20,17 @@ export function ThemeProvider({ children, defaultTheme = "system", switchable = 
   const { user } = useAuth();
   const utils = trpc.useUtils();
   const update = trpc.user.updateProfile.useMutation({ onSuccess: () => utils.auth.me.invalidate() });
-  const [preference, setPreference] = useState<ThemePreference>(() => (localStorage.getItem("theme") as ThemePreference | null) ?? defaultTheme);
+  const [preference, setPreference] = useState<ThemePreference>(() => {
+    try {
+      return normalizeThemePreference(localStorage.getItem("theme") ?? defaultTheme);
+    } catch {
+      return normalizeThemePreference(defaultTheme);
+    }
+  });
   const [systemDark, setSystemDark] = useState(() => window.matchMedia("(prefers-color-scheme: dark)").matches);
 
   useEffect(() => {
-    if (user?.themePreference) setPreference(user.themePreference);
+    if (user?.themePreference) setPreference(normalizeThemePreference(user.themePreference));
   }, [user?.themePreference]);
 
   useEffect(() => {
@@ -37,7 +44,9 @@ export function ThemeProvider({ children, defaultTheme = "system", switchable = 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", theme === "dark");
     document.documentElement.style.colorScheme = theme;
-    localStorage.setItem("theme", preference);
+    try {
+      localStorage.setItem("theme", preference);
+    } catch {}
   }, [preference, theme]);
 
   const value = useMemo<ThemeContextType>(() => ({

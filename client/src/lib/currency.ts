@@ -1,11 +1,12 @@
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { normalizeCurrency, PreferredCurrency } from "@/lib/preferences";
 
-export type PreferredCurrency = "USD" | "EUR" | "GBP" | "NGN";
+export type { PreferredCurrency } from "@/lib/preferences";
 
 export function useCurrency() {
   const { user } = useAuth();
-  const currency = (user?.preferredCurrency ?? "USD") as PreferredCurrency;
+  const currency: PreferredCurrency = normalizeCurrency(user?.preferredCurrency);
   const { data } = trpc.market.fiatRates.useQuery(undefined, { staleTime: 60 * 60 * 1000 });
   const rate = data?.rates[currency] ?? 1;
   return {

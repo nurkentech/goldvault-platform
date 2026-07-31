@@ -1,8 +1,9 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
+import { Language, normalizeLanguage } from "@/lib/preferences";
 
-export type Language = "en" | "fr" | "es" | "ar" | "pt";
+export type { Language } from "@/lib/preferences";
 const labels: Record<Language, Record<string, string>> = {
   en: { Dashboard: "Dashboard", Wallets: "Wallets", Deposit: "Deposit", Withdraw: "Withdraw", Exchange: "Exchange", Investments: "Investments", Transactions: "Transactions", Referral: "Referral", Rewards: "Rewards", Cards: "Cards", Support: "Support", Notifications: "Notifications", Security: "Security", Settings: "Settings", Marketplace: "Marketplace", "Wealth Hub": "Wealth Hub", "Developer & Partner": "Developer & Partner", Logout: "Logout", Profile: "Profile", Language: "Language" },
   fr: { Dashboard: "Tableau de bord", Wallets: "Portefeuilles", Deposit: "Dépôt", Withdraw: "Retrait", Exchange: "Échange", Investments: "Investissements", Transactions: "Transactions", Referral: "Parrainage", Rewards: "Récompenses", Cards: "Cartes", Support: "Assistance", Notifications: "Notifications", Security: "Sécurité", Settings: "Paramètres", Marketplace: "Marché P2P", "Wealth Hub": "Épargne et rendement", "Developer & Partner": "Développeur et partenaire", Logout: "Déconnexion", Profile: "Profil", Language: "Langue" },
@@ -24,10 +25,39 @@ const Context = createContext<{ language: Language; setLanguage: (language: Lang
 export function I18nProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth(); const utils = trpc.useUtils();
   const update = trpc.user.updateProfile.useMutation({ onSuccess: () => utils.auth.me.invalidate() });
-  const [language, setLocalLanguage] = useState<Language>(() => (localStorage.getItem("language") as Language | null) ?? "en");
-  useEffect(() => { if (user?.preferredLanguage) setLocalLanguage(user.preferredLanguage); }, [user?.preferredLanguage]);
-  useEffect(() => { localStorage.setItem("language", language); document.documentElement.lang = language; document.documentElement.dir = language === "ar" ? "rtl" : "ltr"; }, [language]);
-  const value = useMemo(() => ({ language, setLanguage(next: Language) { setLocalLanguage(next); if (user) update.mutate({ preferredLanguage: next }); }, t(key: string) { return key === "AI Copilot" ? copilotLabels[language] : labels[language][key] ?? key; } }), [language, update, user]);
+  const [language, setLocalLanguage] = useState<Language>(() => {
+    try {
+      return normalizeLanguage(localStorage.getItem("language"));
+    } catch {
+      return "en";
+    }
+  });
+  useEffect(() => {
+    if (user?.preferredLanguage) {
+      setLocalLanguage(normalizeLanguage(user.preferredLanguage));
+    }
+  }, [user?.preferredLanguage]);
+  useEffect(() => {
+    try {
+      localStorage.setItem("language", language);
+    } catch {}
+    document.documentElement.lang = language;
+    document.documentElement.dir = language === "ar" ? "rtl" : "ltr";
+  }, [language]);
+  const value = useMemo(() => ({
+    language,
+    setLanguage(next: Language) {
+      const safeLanguage = normalizeLanguage(next);
+      setLocalLanguage(safeLanguage);
+      if (user) update.mutate({ preferredLanguage: safeLanguage });
+    },
+    t(key: string) {
+      const safeLanguage = normalizeLanguage(language);
+      return key === "AI Copilot"
+        ? copilotLabels[safeLanguage]
+        : labels[safeLanguage][key] ?? labels.en[key] ?? key;
+    },
+  }), [language, update, user]);
   return <Context.Provider value={value}>{children}</Context.Provider>;
 }
 
