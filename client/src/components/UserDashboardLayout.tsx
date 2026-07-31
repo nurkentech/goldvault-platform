@@ -60,11 +60,40 @@ const tickerPairs = [
   { symbol: "BNB/USDT", price: "$602.35", change: "-0.45%", positive: false },
 ];
 
+function asFiniteNumber(value: unknown): number | null {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function formatTickerPrice(value: unknown): string {
+  return asFiniteNumber(value)?.toLocaleString() ?? "—";
+}
+
+function formatTickerChange(value: unknown): {
+  label: string;
+  positive: boolean;
+} {
+  if (value === null || value === undefined || value === "") {
+    return { label: "—", positive: true };
+  }
+  const change = asFiniteNumber(value);
+  if (change === null) return { label: "—", positive: true };
+  return {
+    label: `${change >= 0 ? "+" : ""}${change.toFixed(2)}%`,
+    positive: change >= 0,
+  };
+}
+
 export default function UserDashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, loading, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const { language, setLanguage, t } = useI18n();
-  const { data: livePrices = [] } = trpc.market.prices.useQuery(undefined, { refetchInterval: 30_000 });
+  const livePricesQuery = trpc.market.prices.useQuery(undefined, {
+    refetchInterval: 30_000,
+  });
+  const livePrices = Array.isArray(livePricesQuery.data)
+    ? livePricesQuery.data
+    : [];
   const [location, navigate] = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -246,8 +275,15 @@ export default function UserDashboardLayout({ children }: { children: React.Reac
               {livePrices.map((pair) => (
                 <div key={pair.symbol} className="flex items-center gap-2 text-xs whitespace-nowrap">
                   <span className="text-muted-foreground font-medium">{pair.symbol}/USD</span>
-                  <span className="text-foreground font-semibold">${pair.price.toLocaleString()}</span>
-                  <span className={(pair.change24h ?? 0) >= 0 ? "text-emerald-400" : "text-red-400"}>{pair.change24h === null ? "—" : `${pair.change24h >= 0 ? "+" : ""}${pair.change24h.toFixed(2)}%`}</span>
+                  <span className="text-foreground font-semibold">${formatTickerPrice(pair.price)}</span>
+                  {(() => {
+                    const change = formatTickerChange(pair.change24h);
+                    return (
+                      <span className={change.positive ? "text-emerald-400" : "text-red-400"}>
+                        {change.label}
+                      </span>
+                    );
+                  })()}
                 </div>
               ))}
             </div>

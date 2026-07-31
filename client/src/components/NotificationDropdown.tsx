@@ -29,7 +29,11 @@ export default function NotificationDropdown() {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
-  const { data: notifications = [], isLoading } = useNotifications(20);
+  const notificationsQuery = useNotifications(20);
+  const notifications = Array.isArray(notificationsQuery.data)
+    ? notificationsQuery.data
+    : [];
+  const { isLoading } = notificationsQuery;
   const markRead = useMarkNotificationRead();
   const markAllRead = useMarkAllNotificationsRead();
 
