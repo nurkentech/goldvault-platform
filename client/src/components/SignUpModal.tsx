@@ -4,7 +4,7 @@
  */
 
 import { trpc } from "@/lib/trpc";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
@@ -59,6 +59,13 @@ export default function SignUpModal({ isOpen, onClose, initialMode = "signup", s
   const utils = trpc.useUtils();
 
   const identifier = authMethod === "email" ? email : `${countryCode}${phone}`;
+
+  // This component remains mounted while the parent opens and closes it.
+  // Keep the internal mode in sync so clicking "Sign In" never reuses the
+  // initial sign-up state and sends an existing user to profile setup.
+  useEffect(() => {
+    if (isOpen) setMode(initialMode);
+  }, [initialMode, isOpen]);
 
   async function requireAuthenticatedSession() {
     await utils.auth.me.invalidate();
@@ -151,10 +158,10 @@ export default function SignUpModal({ isOpen, onClose, initialMode = "signup", s
         code,
       });
       if (verification.requiresTwoFactor) {
-        await utils.auth.me.invalidate();
         toast.info("Complete two-factor verification to continue");
-        handleClose();
-        navigate("/verify-2fa");
+        window.location.assign(
+          `/verify-2fa?returnPath=${encodeURIComponent(successPath)}`,
+        );
         return;
       }
       await requireAuthenticatedSession();
@@ -162,8 +169,7 @@ export default function SignUpModal({ isOpen, onClose, initialMode = "signup", s
         setStep("profile");
       } else {
         toast.success("Signed in successfully!", { description: "Welcome back to GoldVaults.us" });
-        handleClose();
-        navigate(successPath);
+        window.location.replace(successPath);
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Invalid verification code";
@@ -200,8 +206,7 @@ export default function SignUpModal({ isOpen, onClose, initialMode = "signup", s
       description: "Your account has been created. You've received 500 welcome GoldCoins!",
       duration: 6000,
     });
-    handleClose();
-    navigate(successPath);
+    window.location.replace(successPath);
   }
 
   function handleClose() {

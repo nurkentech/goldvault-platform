@@ -18,14 +18,44 @@ const context = readFileSync(
   resolve(process.cwd(), "server/_core/context.ts"),
   "utf8",
 );
+const verifyTwoFactor = readFileSync(
+  resolve(process.cwd(), "client/src/pages/VerifyTwoFactor.tsx"),
+  "utf8",
+);
+const userTwoFactor = readFileSync(
+  resolve(process.cwd(), "server/userTwoFactor.ts"),
+  "utf8",
+);
+const userSessions = readFileSync(
+  resolve(process.cwd(), "server/userSessions.ts"),
+  "utf8",
+);
 
 describe("two-factor login UI", () => {
   it("routes pending user sessions to the second-factor screen", () => {
     expect(signupModal).toContain("verification.requiresTwoFactor");
-    expect(signupModal).toContain('navigate("/verify-2fa")');
+    expect(signupModal).toContain(
+      "`/verify-2fa?returnPath=${encodeURIComponent(successPath)}`",
+    );
+    expect(signupModal).not.toContain(
+      'await utils.auth.me.invalidate();\n        toast.info("Complete two-factor',
+    );
     expect(signupModal.indexOf("verification.requiresTwoFactor")).toBeLessThan(
       signupModal.indexOf("await requireAuthenticatedSession()"),
     );
+  });
+
+  it("keeps the modal sign-in mode synchronized and uses a hard authenticated redirect", () => {
+    expect(signupModal).toContain("if (isOpen) setMode(initialMode)");
+    expect(signupModal).toContain("window.location.replace(successPath)");
+  });
+
+  it("confirms the authenticated session before leaving two-factor verification", () => {
+    expect(verifyTwoFactor).toContain("await utils.auth.me.fetch()");
+    expect(verifyTwoFactor).toContain("window.location.replace(returnPath)");
+    expect(verifyTwoFactor).toContain("This verification session has expired");
+    expect(userTwoFactor).toContain("if (!sessionVerified)");
+    expect(userSessions).toContain("Promise<boolean>");
   });
 
   it("refreshes the admin identity before opening protected admin pages", () => {
