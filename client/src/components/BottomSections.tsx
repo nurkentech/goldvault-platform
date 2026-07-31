@@ -331,7 +331,7 @@ const FOOTER_LINKS: Record<string, { label: string; href: string }[]> = {
     { label: "Vault Storage", href: "/vault-storage" },
     { label: "Physical Delivery", href: "/physical-delivery" },
     { label: "Gold Price Alerts", href: "/gold-price-alerts" },
-    { label: "Mining Partners", href: "/mining-partners" },
+    { label: "Mining Explorer", href: "/mining-partners" },
   ],
   "Crypto Services": [
     { label: "Bitcoin Wallet", href: "/bitcoin-wallet" },
