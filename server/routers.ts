@@ -29,15 +29,23 @@ import { hashPassword } from "./adminAuth";
 import { aiCopilotRouter } from "./aiCopilot";
 import { getPublishedWebsitePage, getPublicWebsiteContent } from "./cms";
 import {
+  createSocialCall,
+  endSocialCall,
+  getIncomingSocialCall,
+  getSocialCall,
+  respondToSocialCall,
+  signalSocialCall,
+} from "./socialCalls";
+import {
   clearAllNotifications, claimChallengeReward, createAddressBookEntry,
   createMintingRecord, createNfcCard, createNotification, createPriceAlert,
   createSocialPost, createTransaction, deleteAddressBookEntry, deletePriceAlert,
-  getActiveChallenges, getCommunityFeed, getLeaderboard, getUserAddressBook,
+  getActiveChallenges, getChatHistory, getCommunityFeed, getLeaderboard, getSocialContacts, getUserAddressBook,
   getUserById, getUserByOpenId, getUserByVerifiedIdentifier,
   getUserChallengeProgress, getUserMintingHistory, getUserNfcCards,
   getOrInitUserWallets, getUserNotifications, getUserPriceAlerts,
   getUserTransactions, getUserWallets, markAllNotificationsRead,
-  markNotificationRead, sendChatMessage,
+  markChatRead, markNotificationRead, sendChatMessage,
   toggle2FA, updateAddressBookEntry, updateNfcCard, updateNotifPrefs, updateUserGoldCoins,
   updateUserProfile, upsertUser,
 } from "./db";
@@ -355,6 +363,21 @@ export const appRouter = router({
       }),
   }),
   social: router({
+    contacts: protectedProcedure
+      .input(z.object({ limit: z.number().int().min(1).max(100).default(50) }).optional())
+      .query(({ ctx, input }) => getSocialContacts(ctx.user.id, input?.limit ?? 50)),
+    history: protectedProcedure
+      .input(z.object({ otherUserId: z.number().int().positive(), limit: z.number().int().min(1).max(100).default(50) }))
+      .query(async ({ ctx, input }) => {
+        const messages = await getChatHistory(ctx.user.id, input.otherUserId, input.limit);
+        return messages.reverse();
+      }),
+    markRead: protectedProcedure
+      .input(z.object({ otherUserId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        await markChatRead(ctx.user.id, input.otherUserId);
+        return { success: true };
+      }),
     feed: publicProcedure
       .input(z.object({ limit: z.number().default(30) }))
       .query(async ({ input }) => getCommunityFeed(input.limit)),
@@ -378,6 +401,11 @@ export const appRouter = router({
         mediaType: z.enum(["text", "image", "video", "goldcoin"]).default("text"),
       }))
       .mutation(async ({ ctx, input }) => {
+        if (input.toUserId === ctx.user.id) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "You cannot message your own account" });
+        }
+        const recipient = await getUserById(input.toUserId);
+        if (!recipient) throw new TRPCError({ code: "NOT_FOUND", message: "Member not found" });
         await sendChatMessage({ ...input, fromUserId: ctx.user.id });
         await createNotification({
           userId: input.toUserId, type: "message", title: "New Message",
@@ -386,6 +414,58 @@ export const appRouter = router({
         });
         return { success: true };
       }),
+    call: router({
+      iceServers: protectedProcedure.query(() => {
+        const servers: Array<{ urls: string; username?: string; credential?: string }> = [
+          { urls: process.env.STUN_URL || "stun:stun.l.google.com:19302" },
+        ];
+        if (process.env.TURN_URL && process.env.TURN_USERNAME && process.env.TURN_CREDENTIAL) {
+          servers.push({
+            urls: process.env.TURN_URL,
+            username: process.env.TURN_USERNAME,
+            credential: process.env.TURN_CREDENTIAL,
+          });
+        }
+        return servers;
+      }),
+      incoming: protectedProcedure.query(({ ctx }) => getIncomingSocialCall(ctx.user.id)),
+      get: protectedProcedure
+        .input(z.object({ callId: z.string().uuid() }))
+        .query(({ ctx, input }) => getSocialCall(input.callId, ctx.user.id)),
+      create: protectedProcedure
+        .input(z.object({ toUserId: z.number().int().positive(), kind: z.enum(["audio", "video"]) }))
+        .mutation(async ({ ctx, input }) => {
+          const recipient = await getUserById(input.toUserId);
+          if (!recipient) throw new TRPCError({ code: "NOT_FOUND", message: "Member not found" });
+          const call = createSocialCall(ctx.user.id, input.toUserId, input.kind);
+          await createNotification({
+            userId: input.toUserId,
+            type: "message",
+            title: `Incoming ${input.kind} call`,
+            body: `${ctx.user.name || ctx.user.username || "A GoldVaults member"} is calling you`,
+            icon: input.kind === "video" ? "video" : "phone",
+            actionUrl: "/social",
+            actionLabel: "Answer",
+          });
+          return call;
+        }),
+      respond: protectedProcedure
+        .input(z.object({ callId: z.string().uuid(), accept: z.boolean() }))
+        .mutation(({ ctx, input }) => respondToSocialCall(input.callId, ctx.user.id, input.accept)),
+      signal: protectedProcedure
+        .input(z.object({
+          callId: z.string().uuid(),
+          type: z.enum(["offer", "answer", "candidate"]),
+          sdp: z.string().max(100_000).optional(),
+          candidate: z.string().max(8_000).optional(),
+          sdpMid: z.string().max(256).nullable().optional(),
+          sdpMLineIndex: z.number().int().min(0).max(64).nullable().optional(),
+        }))
+        .mutation(({ ctx, input }) => signalSocialCall(input.callId, ctx.user.id, input)),
+      end: protectedProcedure
+        .input(z.object({ callId: z.string().uuid() }))
+        .mutation(({ ctx, input }) => endSocialCall(input.callId, ctx.user.id)),
+    }),
   }),
   minting: router({
     history: protectedProcedure.query(async ({ ctx }) => getUserMintingHistory(ctx.user.id)),

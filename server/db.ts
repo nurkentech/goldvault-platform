@@ -1,11 +1,11 @@
-import { and, desc, eq, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, isNull, ne, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
   InsertUser, InsertAddressBookEntry, InsertChatMessage, InsertMintingRecord,
   InsertNfcCard, InsertNotification, InsertPriceAlert, InsertSocialPost,
   InsertTransaction, InsertWallet,
   addressBook, challenges, chatMessages, mintingRecords, nfcCards,
-  notifications, priceAlerts, socialPosts, transactions, userChallenges, users, wallets,
+  notifications, priceAlerts, socialPosts, transactions, userChallenges, userSessions, users, wallets,
   investments, kycDocuments, InsertInvestment,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
@@ -311,6 +311,72 @@ export async function getChatHistory(userId: number, otherUserId: number, limit 
   const db = await getDb();
   if (!db) return [];
   return db.select().from(chatMessages).where(or(and(eq(chatMessages.fromUserId, userId), eq(chatMessages.toUserId, otherUserId)), and(eq(chatMessages.fromUserId, otherUserId), eq(chatMessages.toUserId, userId)))).orderBy(desc(chatMessages.createdAt)).limit(limit);
+}
+
+export async function getSocialContacts(userId: number, limit = 50) {
+  const db = await getDb();
+  if (!db) return [];
+  const [members, recentMessages, activeSessions] = await Promise.all([
+    db
+      .select({
+        id: users.id,
+        name: users.name,
+        username: users.username,
+        avatarUrl: users.avatarUrl,
+        goldCoins: users.goldCoins,
+        tier: users.tier,
+        isOnline: users.isOnline,
+        lastSignedIn: users.lastSignedIn,
+      })
+      .from(users)
+      .where(ne(users.id, userId))
+      .orderBy(desc(users.isOnline), desc(users.lastSignedIn))
+      .limit(limit),
+    db
+      .select()
+      .from(chatMessages)
+      .where(or(eq(chatMessages.fromUserId, userId), eq(chatMessages.toUserId, userId)))
+      .orderBy(desc(chatMessages.createdAt))
+      .limit(500),
+    db
+      .select({ userId: userSessions.userId })
+      .from(userSessions)
+      .where(and(
+        isNull(userSessions.revokedAt),
+        gt(userSessions.expiresAt, new Date()),
+        gt(userSessions.lastActiveAt, new Date(Date.now() - 5 * 60_000)),
+      )),
+  ]);
+  const activeUserIds = new Set(activeSessions.map((session) => session.userId));
+
+  return members.map((member) => {
+    const messages = recentMessages.filter(
+      (message) => message.fromUserId === member.id || message.toUserId === member.id,
+    );
+    const lastMessage = messages[0];
+    return {
+      ...member,
+      isOnline: activeUserIds.has(member.id),
+      lastMessage: lastMessage?.content ?? null,
+      lastMessageAt: lastMessage?.createdAt ?? null,
+      unreadCount: messages.filter(
+        (message) => message.fromUserId === member.id && message.toUserId === userId && !message.isRead,
+      ).length,
+    };
+  });
+}
+
+export async function markChatRead(userId: number, otherUserId: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db
+    .update(chatMessages)
+    .set({ isRead: true })
+    .where(and(
+      eq(chatMessages.fromUserId, otherUserId),
+      eq(chatMessages.toUserId, userId),
+      eq(chatMessages.isRead, false),
+    ));
 }
 
 export async function sendChatMessage(data: InsertChatMessage) {

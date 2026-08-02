@@ -79,6 +79,7 @@ import VerifyTwoFactor from "./pages/VerifyTwoFactor";
 import AICopilot from "./pages/dashboard/AICopilot";
 import AdminAICopilot from "./pages/admin/AdminAICopilot";
 import AdminContent from "./pages/admin/AdminContent";
+import AdminBlog from "./pages/admin/AdminBlog";
 import ManagedPage from "./pages/ManagedPage";
 import Analytics from "./components/Analytics";
 import { CommunitySocialPage, MiningExplorerPage } from "./pages/PlatformToolPages";
@@ -179,6 +180,7 @@ function Router() {
       <Route path="/admin/announcements">{() => <AdminPage component={AdminAnnouncements} />}</Route>
       <Route path="/admin/settings">{() => <AdminPage component={AdminSettings} />}</Route>
       <Route path="/admin/content">{() => <AdminPage component={AdminContent} />}</Route>
+      <Route path="/admin/blog">{() => <AdminPage component={AdminBlog} />}</Route>
       <Route path="/admin/account">{() => <AdminPage component={AdminAccount} />}</Route>
       <Route path="/admin/operations">{() => <AdminPage component={AdminOperations} />}</Route>
       <Route path="/admin/ai-copilot">{() => <AdminPage component={AdminAICopilot} />}</Route>

@@ -154,6 +154,20 @@ export function useCommunityFeed(limit = 30) {
   return trpc.social.feed.useQuery({ limit }, { refetchInterval: 60_000 });
 }
 
+export function useSocialContacts(enabled = true) {
+  return trpc.social.contacts.useQuery(
+    { limit: 50 },
+    { enabled, refetchInterval: 15_000, retry: false },
+  );
+}
+
+export function useChatHistory(otherUserId?: number) {
+  return trpc.social.history.useQuery(
+    { otherUserId: otherUserId ?? 0, limit: 100 },
+    { enabled: Boolean(otherUserId), refetchInterval: 5_000, retry: false },
+  );
+}
+
 export function useCreatePost() {
   const utils = trpc.useUtils();
   return trpc.social.post.useMutation({
@@ -167,8 +181,14 @@ export function useCreatePost() {
 }
 
 export function useSendMessage() {
+  const utils = trpc.useUtils();
   return trpc.social.sendMessage.useMutation({
-    onSuccess: () => toast.success("Message sent!"),
+    onSuccess: async (_data, input) => {
+      await Promise.all([
+        utils.social.history.invalidate({ otherUserId: input.toUserId, limit: 100 }),
+        utils.social.contacts.invalidate(),
+      ]);
+    },
     onError: (e) => toast.error(e.message),
   });
 }
