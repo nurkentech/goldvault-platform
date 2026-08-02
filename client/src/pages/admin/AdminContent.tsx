@@ -1,11 +1,14 @@
 import { useEffect, useState } from "react";
 import {
+  ArrowDown,
+  ArrowUp,
   ExternalLink,
   FilePlus2,
   FileText,
   Home,
   Image,
   Loader2,
+  Plus,
   Save,
   Trash2,
   Upload,
@@ -28,6 +31,38 @@ interface PageEditor {
   sortOrder: number;
 }
 
+interface HeroStatEditor {
+  label: string;
+  value: string;
+}
+
+interface HeroSlideEditor {
+  id: string;
+  enabled: boolean;
+  badge: string;
+  title: string;
+  titleAccent: string;
+  subtitle: string;
+  primaryCtaLabel: string;
+  primaryCtaUrl: string;
+  secondaryCtaLabel: string;
+  secondaryCtaUrl: string;
+  heroImageUrl: string;
+  stats: HeroStatEditor[];
+}
+
+interface HomeEditor {
+  badge: string;
+  title: string;
+  titleAccent: string;
+  subtitle: string;
+  primaryCtaLabel: string;
+  secondaryCtaLabel: string;
+  secondaryCtaUrl: string;
+  heroImageUrl: string;
+  slides: HeroSlideEditor[];
+}
+
 const emptyPage = (): PageEditor => ({
   slug: "",
   title: "",
@@ -38,6 +73,25 @@ const emptyPage = (): PageEditor => ({
   status: "draft",
   showInNavigation: false,
   sortOrder: 100,
+});
+
+const emptyHeroSlide = (position: number): HeroSlideEditor => ({
+  id: `banner-${Date.now()}-${position}`,
+  enabled: true,
+  badge: "New homepage banner",
+  title: "Your headline",
+  titleAccent: "Highlighted text",
+  subtitle: "Add a clear introduction for this banner.",
+  primaryCtaLabel: "Get Started",
+  primaryCtaUrl: "#signup",
+  secondaryCtaLabel: "Learn More",
+  secondaryCtaUrl: "/how-it-works",
+  heroImageUrl: "/manus-storage/hero-bg_ff436ad1.jpg",
+  stats: [
+    { label: "Feature", value: "Available" },
+    { label: "Security", value: "Enabled" },
+    { label: "Support", value: "Accessible" },
+  ],
 });
 
 const inputClass =
@@ -58,7 +112,7 @@ export default function AdminContent() {
     logoUrl: "",
     logoAlt: "GoldVaults logo",
   });
-  const [home, setHome] = useState({
+  const [home, setHome] = useState<HomeEditor>({
     badge: "",
     title: "",
     titleAccent: "",
@@ -67,13 +121,20 @@ export default function AdminContent() {
     secondaryCtaLabel: "",
     secondaryCtaUrl: "/markets",
     heroImageUrl: "",
+    slides: [],
   });
+  const [activeSlideId, setActiveSlideId] = useState("");
   const [page, setPage] = useState<PageEditor>(emptyPage);
 
   useEffect(() => {
     if (!cmsQuery.data) return;
     setBranding(cmsQuery.data.branding);
     setHome(cmsQuery.data.home);
+    setActiveSlideId((current) =>
+      cmsQuery.data.home.slides.some((slide) => slide.id === current)
+        ? current
+        : cmsQuery.data.home.slides[0]?.id ?? "",
+    );
   }, [cmsQuery.data]);
 
   const refresh = async () => {
@@ -94,12 +155,95 @@ export default function AdminContent() {
   };
 
   const saveHome = async () => {
+    const firstSlide = home.slides[0];
+    if (!firstSlide) {
+      toast.error("Add at least one homepage banner");
+      return;
+    }
+    const normalizedHome = {
+      ...home,
+      badge: firstSlide.badge,
+      title: firstSlide.title,
+      titleAccent: firstSlide.titleAccent,
+      subtitle: firstSlide.subtitle,
+      primaryCtaLabel: firstSlide.primaryCtaLabel,
+      secondaryCtaLabel: firstSlide.secondaryCtaLabel,
+      secondaryCtaUrl: firstSlide.secondaryCtaUrl,
+      heroImageUrl: firstSlide.heroImageUrl,
+    };
     try {
-      await updateHome.mutateAsync(home);
+      await updateHome.mutateAsync(normalizedHome);
+      setHome(normalizedHome);
       await refresh();
-      toast.success("Homepage content updated");
+      toast.success("Homepage banners updated");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Unable to update homepage");
+    }
+  };
+
+  const updateHeroSlide = (id: string, update: Partial<HeroSlideEditor>) => {
+    setHome((current) => ({
+      ...current,
+      slides: current.slides.map((slide) => slide.id === id ? { ...slide, ...update } : slide),
+    }));
+  };
+
+  const addHeroSlide = () => {
+    if (home.slides.length >= 5) {
+      toast.error("A maximum of five homepage banners is supported");
+      return;
+    }
+    const slide = emptyHeroSlide(home.slides.length + 1);
+    setHome((current) => ({ ...current, slides: [...current.slides, slide] }));
+    setActiveSlideId(slide.id);
+  };
+
+  const removeHeroSlide = (id: string) => {
+    if (home.slides.length <= 1) {
+      toast.error("Keep at least one homepage banner");
+      return;
+    }
+    const remaining = home.slides.filter((slide) => slide.id !== id);
+    setHome((current) => ({ ...current, slides: remaining }));
+    setActiveSlideId(remaining[0]?.id ?? "");
+  };
+
+  const moveHeroSlide = (id: string, direction: -1 | 1) => {
+    const index = home.slides.findIndex((slide) => slide.id === id);
+    const destination = index + direction;
+    if (index < 0 || destination < 0 || destination >= home.slides.length) return;
+    const slides = [...home.slides];
+    [slides[index], slides[destination]] = [slides[destination], slides[index]];
+    setHome((current) => ({ ...current, slides }));
+  };
+
+  const uploadHeroImage = async (id: string, file?: File) => {
+    if (!file) return;
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/gif"] as const;
+    if (!allowedTypes.includes(file.type as (typeof allowedTypes)[number])) {
+      toast.error("Choose a JPG, PNG, WebP, or GIF image");
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error("Banner image must be smaller than 2 MB");
+      return;
+    }
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
+      });
+      const uploaded = await uploadAsset.mutateAsync({
+        filename: file.name,
+        mimeType: file.type as (typeof allowedTypes)[number],
+        dataBase64: dataUrl.split(",", 2)[1] ?? "",
+      });
+      updateHeroSlide(id, { heroImageUrl: uploaded.url });
+      toast.success("Banner image uploaded. Save banners to publish it.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Banner upload failed");
     }
   };
 
@@ -172,6 +316,10 @@ export default function AdminContent() {
     { id: "home" as const, label: "Homepage", icon: Home },
     { id: "pages" as const, label: "Pages", icon: FileText },
   ];
+  const activeHeroSlide = home.slides.find((slide) => slide.id === activeSlideId) ?? home.slides[0];
+  const activeHeroIndex = activeHeroSlide
+    ? home.slides.findIndex((slide) => slide.id === activeHeroSlide.id)
+    : -1;
 
   if (cmsQuery.isLoading) {
     return <div className="h-72 animate-pulse rounded-xl bg-gray-800/40" />;
@@ -253,26 +401,86 @@ export default function AdminContent() {
       )}
 
       {activeTab === "home" && (
-        <section className="space-y-5 rounded-xl border border-gray-800/60 bg-[#0d1321] p-6">
-          <div>
-            <h2 className="text-lg font-semibold text-white">Homepage hero</h2>
-            <p className="text-xs text-gray-400">Controls the main message visitors see first.</p>
-          </div>
-          <div className="grid gap-5 md:grid-cols-2">
-            <Field label="Badge"><input className={inputClass} value={home.badge} onChange={(event) => setHome({ ...home, badge: event.target.value })} /></Field>
-            <Field label="Headline"><input className={inputClass} value={home.title} onChange={(event) => setHome({ ...home, title: event.target.value })} /></Field>
-            <Field label="Highlighted headline"><input className={inputClass} value={home.titleAccent} onChange={(event) => setHome({ ...home, titleAccent: event.target.value })} /></Field>
-            <Field label="Hero image URL"><input className={inputClass} value={home.heroImageUrl} onChange={(event) => setHome({ ...home, heroImageUrl: event.target.value })} /></Field>
-            <Field label="Primary button"><input className={inputClass} value={home.primaryCtaLabel} onChange={(event) => setHome({ ...home, primaryCtaLabel: event.target.value })} /></Field>
-            <Field label="Secondary button"><input className={inputClass} value={home.secondaryCtaLabel} onChange={(event) => setHome({ ...home, secondaryCtaLabel: event.target.value })} /></Field>
-            <Field label="Secondary button URL"><input className={inputClass} value={home.secondaryCtaUrl} onChange={(event) => setHome({ ...home, secondaryCtaUrl: event.target.value })} /></Field>
-            <div className="md:col-span-2">
-              <Field label="Introduction">
-                <textarea rows={5} className={inputClass} value={home.subtitle} onChange={(event) => setHome({ ...home, subtitle: event.target.value })} />
-              </Field>
+        <section className="space-y-6 rounded-xl border border-gray-800/60 bg-[#0d1321] p-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-white">Header banners</h2>
+              <p className="text-xs text-gray-400">Edit the rotating homepage images, write-up, buttons, and highlights.</p>
             </div>
+            <button type="button" onClick={addHeroSlide} disabled={home.slides.length >= 5} className="inline-flex items-center justify-center gap-2 rounded-lg border border-amber-500/30 px-4 py-2 text-sm text-amber-400 hover:bg-amber-500/10 disabled:opacity-40">
+              <Plus className="h-4 w-4" /> Add banner
+            </button>
           </div>
-          <SaveButton pending={updateHome.isPending} onClick={saveHome} label="Save homepage" />
+
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {home.slides.map((slide, index) => (
+              <button key={slide.id} type="button" onClick={() => setActiveSlideId(slide.id)} className={`min-w-40 rounded-lg border px-3 py-2 text-left ${activeHeroSlide?.id === slide.id ? "border-amber-500/40 bg-amber-500/10" : "border-gray-800 bg-[#080d19]"}`}>
+                <span className="block text-[10px] uppercase tracking-wider text-gray-500">Banner {index + 1}</span>
+                <span className="block truncate text-sm font-medium text-white">{slide.title}</span>
+                <span className={`mt-1 block text-[10px] ${slide.enabled ? "text-emerald-400" : "text-gray-500"}`}>{slide.enabled ? "Visible" : "Hidden"}</span>
+              </button>
+            ))}
+          </div>
+
+          {activeHeroSlide && (
+            <div className="space-y-6">
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-gray-800 bg-[#080d19] p-3">
+                <label className="flex items-center gap-2 text-sm text-gray-300">
+                  <input type="checkbox" checked={activeHeroSlide.enabled} onChange={(event) => updateHeroSlide(activeHeroSlide.id, { enabled: event.target.checked })} />
+                  Show this banner on the homepage
+                </label>
+                <div className="flex items-center gap-2">
+                  <button type="button" title="Move banner up" onClick={() => moveHeroSlide(activeHeroSlide.id, -1)} disabled={activeHeroIndex <= 0} className="rounded-lg border border-gray-700 p-2 text-gray-300 disabled:opacity-30"><ArrowUp className="h-4 w-4" /></button>
+                  <button type="button" title="Move banner down" onClick={() => moveHeroSlide(activeHeroSlide.id, 1)} disabled={activeHeroIndex >= home.slides.length - 1} className="rounded-lg border border-gray-700 p-2 text-gray-300 disabled:opacity-30"><ArrowDown className="h-4 w-4" /></button>
+                  <button type="button" onClick={() => removeHeroSlide(activeHeroSlide.id)} disabled={home.slides.length <= 1} className="inline-flex items-center gap-2 rounded-lg border border-red-500/30 px-3 py-2 text-xs text-red-400 disabled:opacity-30"><Trash2 className="h-3.5 w-3.5" /> Remove</button>
+                </div>
+              </div>
+
+              <div className="grid gap-5 lg:grid-cols-[18rem_1fr]">
+                <div className="space-y-3">
+                  <div className="flex min-h-44 items-center justify-center overflow-hidden rounded-xl border border-dashed border-gray-700 bg-[#080d19]">
+                    {activeHeroSlide.heroImageUrl ? <img src={activeHeroSlide.heroImageUrl} alt="Banner preview" className="h-44 w-full object-cover" /> : <Image className="h-10 w-10 text-gray-600" />}
+                  </div>
+                  <label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-gray-700 px-4 py-2 text-sm text-gray-300 hover:border-amber-500/40 hover:text-amber-400">
+                    {uploadAsset.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                    Upload banner image
+                    <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="hidden" onChange={(event) => void uploadHeroImage(activeHeroSlide.id, event.target.files?.[0])} />
+                  </label>
+                  <p className="text-[10px] leading-relaxed text-gray-500">JPG, PNG, WebP, or GIF. Maximum 2 MB. Wide landscape images work best.</p>
+                </div>
+
+                <div className="grid gap-5 md:grid-cols-2">
+                  <Field label="Banner image URL"><input className={inputClass} value={activeHeroSlide.heroImageUrl} onChange={(event) => updateHeroSlide(activeHeroSlide.id, { heroImageUrl: event.target.value })} placeholder="https://… or /manus-storage/…" /></Field>
+                  <Field label="Badge"><input className={inputClass} value={activeHeroSlide.badge} onChange={(event) => updateHeroSlide(activeHeroSlide.id, { badge: event.target.value })} /></Field>
+                  <Field label="Headline"><input className={inputClass} value={activeHeroSlide.title} onChange={(event) => updateHeroSlide(activeHeroSlide.id, { title: event.target.value })} /></Field>
+                  <Field label="Highlighted headline"><input className={inputClass} value={activeHeroSlide.titleAccent} onChange={(event) => updateHeroSlide(activeHeroSlide.id, { titleAccent: event.target.value })} /></Field>
+                  <div className="md:col-span-2"><Field label="Banner write-up"><textarea rows={5} className={inputClass} value={activeHeroSlide.subtitle} onChange={(event) => updateHeroSlide(activeHeroSlide.id, { subtitle: event.target.value })} /></Field></div>
+                  <Field label="Primary button text"><input className={inputClass} value={activeHeroSlide.primaryCtaLabel} onChange={(event) => updateHeroSlide(activeHeroSlide.id, { primaryCtaLabel: event.target.value })} /></Field>
+                  <Field label="Primary button destination"><input className={inputClass} value={activeHeroSlide.primaryCtaUrl} onChange={(event) => updateHeroSlide(activeHeroSlide.id, { primaryCtaUrl: event.target.value })} placeholder="#signup or /dashboard" /></Field>
+                  <Field label="Secondary button text"><input className={inputClass} value={activeHeroSlide.secondaryCtaLabel} onChange={(event) => updateHeroSlide(activeHeroSlide.id, { secondaryCtaLabel: event.target.value })} /></Field>
+                  <Field label="Secondary button destination"><input className={inputClass} value={activeHeroSlide.secondaryCtaUrl} onChange={(event) => updateHeroSlide(activeHeroSlide.id, { secondaryCtaUrl: event.target.value })} placeholder="/markets" /></Field>
+                </div>
+              </div>
+
+              <div>
+                <h3 className="text-sm font-semibold text-white">Banner highlights</h3>
+                <p className="mb-3 text-xs text-gray-500">These three short facts appear below the buttons. Use only verifiable information.</p>
+                <div className="grid gap-3 md:grid-cols-3">
+                  {activeHeroSlide.stats.map((stat, index) => (
+                    <div key={index} className="space-y-2 rounded-lg border border-gray-800 bg-[#080d19] p-3">
+                      <input aria-label={`Highlight ${index + 1} value`} className={inputClass} value={stat.value} onChange={(event) => updateHeroSlide(activeHeroSlide.id, { stats: activeHeroSlide.stats.map((item, itemIndex) => itemIndex === index ? { ...item, value: event.target.value } : item) })} placeholder="Value" />
+                      <input aria-label={`Highlight ${index + 1} label`} className={inputClass} value={stat.label} onChange={(event) => updateHeroSlide(activeHeroSlide.id, { stats: activeHeroSlide.stats.map((item, itemIndex) => itemIndex === index ? { ...item, label: event.target.value } : item) })} placeholder="Label" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="flex flex-wrap items-center gap-3 border-t border-gray-800 pt-5">
+            <SaveButton pending={updateHome.isPending} onClick={saveHome} label="Save header banners" />
+            <span className="text-xs text-gray-500">Changes appear publicly after saving.</span>
+          </div>
         </section>
       )}
 

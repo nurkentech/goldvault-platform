@@ -18,6 +18,26 @@ export interface WebsitePageInput {
   publishedAt: string | null;
 }
 
+export interface WebsiteHeroStatInput {
+  label: string;
+  value: string;
+}
+
+export interface WebsiteHeroSlideInput {
+  id: string;
+  enabled: boolean;
+  badge: string;
+  title: string;
+  titleAccent: string;
+  subtitle: string;
+  primaryCtaLabel: string;
+  primaryCtaUrl: string;
+  secondaryCtaLabel: string;
+  secondaryCtaUrl: string;
+  heroImageUrl: string;
+  stats: WebsiteHeroStatInput[];
+}
+
 export interface WebsiteContentInput {
   branding: {
     siteName: string;
@@ -34,6 +54,7 @@ export interface WebsiteContentInput {
     secondaryCtaLabel: string;
     secondaryCtaUrl: string;
     heroImageUrl: string;
+    slides: WebsiteHeroSlideInput[];
   };
   pages: WebsitePageInput[];
 }
@@ -74,6 +95,63 @@ export interface PlatformSettingsInput {
   website: WebsiteContentInput;
 }
 
+export const DEFAULT_HERO_SLIDES: WebsiteHeroSlideInput[] = [
+  {
+    id: "gold-with-crypto",
+    enabled: true,
+    badge: "The Gold Standard of Crypto Investing",
+    title: "Buy Physical Gold",
+    titleAccent: "With Crypto",
+    subtitle: "Convert supported cryptocurrencies into available gold products and manage them from your GoldVaults account.",
+    primaryCtaLabel: "Get Started",
+    primaryCtaUrl: "#signup",
+    secondaryCtaLabel: "View Gold Prices",
+    secondaryCtaUrl: "/markets",
+    heroImageUrl: "/manus-storage/hero-bg_ff436ad1.jpg",
+    stats: [
+      { label: "Account protection", value: "2FA" },
+      { label: "Market access", value: "24/7" },
+      { label: "Portfolio view", value: "Unified" },
+    ],
+  },
+  {
+    id: "portfolio-tools",
+    enabled: true,
+    badge: "Gold and Crypto Account Tools",
+    title: "Manage Your",
+    titleAccent: "Digital Portfolio",
+    subtitle: "Review wallets, market information, transactions, rewards, and available investment tools in one secure account.",
+    primaryCtaLabel: "Open Dashboard",
+    primaryCtaUrl: "/dashboard",
+    secondaryCtaLabel: "Explore Markets",
+    secondaryCtaUrl: "/markets",
+    heroImageUrl: "/manus-storage/hero-bg_ff436ad1.jpg",
+    stats: [
+      { label: "Wallet tools", value: "Live" },
+      { label: "Market data", value: "Current" },
+      { label: "Account history", value: "Tracked" },
+    ],
+  },
+  {
+    id: "research-and-security",
+    enabled: true,
+    badge: "Research Before You Invest",
+    title: "Make Informed",
+    titleAccent: "Asset Decisions",
+    subtitle: "Use market, security, and educational resources to understand products and risks before making an investment decision.",
+    primaryCtaLabel: "How It Works",
+    primaryCtaUrl: "/how-it-works",
+    secondaryCtaLabel: "Security Overview",
+    secondaryCtaUrl: "/security",
+    heroImageUrl: "/manus-storage/hero-bg_ff436ad1.jpg",
+    stats: [
+      { label: "Risk information", value: "Available" },
+      { label: "Security controls", value: "Enabled" },
+      { label: "Support", value: "Accessible" },
+    ],
+  },
+];
+
 export const DEFAULT_WEBSITE_CONTENT: WebsiteContentInput = {
   branding: {
     siteName: "GoldVaults",
@@ -91,6 +169,7 @@ export const DEFAULT_WEBSITE_CONTENT: WebsiteContentInput = {
     secondaryCtaLabel: "View Gold Prices",
     secondaryCtaUrl: "/markets",
     heroImageUrl: "/manus-storage/hero-bg_ff436ad1.jpg",
+    slides: DEFAULT_HERO_SLIDES,
   },
   pages: [],
 };
@@ -138,6 +217,38 @@ export const DEFAULT_PLATFORM_SETTINGS: PlatformSettingsInput = {
 
 function mergeSettings(settings: unknown): PlatformSettingsInput {
   const stored = settings as Partial<PlatformSettingsInput> | null;
+  const storedHome = stored?.website?.home;
+  const mergedHome = {
+    ...DEFAULT_WEBSITE_CONTENT.home,
+    ...storedHome,
+  };
+  const fallbackSlides = DEFAULT_HERO_SLIDES.map((slide, index) =>
+    index === 0
+      ? {
+          ...slide,
+          badge: mergedHome.badge,
+          title: mergedHome.title,
+          titleAccent: mergedHome.titleAccent,
+          subtitle: mergedHome.subtitle,
+          primaryCtaLabel: mergedHome.primaryCtaLabel,
+          secondaryCtaLabel: mergedHome.secondaryCtaLabel,
+          secondaryCtaUrl: mergedHome.secondaryCtaUrl,
+          heroImageUrl: mergedHome.heroImageUrl || slide.heroImageUrl,
+        }
+      : { ...slide, stats: slide.stats.map((stat) => ({ ...stat })) },
+  );
+  const slides = Array.isArray(storedHome?.slides) && storedHome.slides.length > 0
+    ? storedHome.slides.slice(0, 5).map((slide, index) => {
+        const fallback = DEFAULT_HERO_SLIDES[index % DEFAULT_HERO_SLIDES.length];
+        return {
+          ...fallback,
+          ...slide,
+          stats: Array.isArray(slide.stats) && slide.stats.length > 0
+            ? slide.stats.slice(0, 3)
+            : fallback.stats.map((stat) => ({ ...stat })),
+        };
+      })
+    : fallbackSlides;
   return {
     ...DEFAULT_PLATFORM_SETTINGS,
     ...stored,
@@ -155,8 +266,8 @@ function mergeSettings(settings: unknown): PlatformSettingsInput {
         ...stored?.website?.branding,
       },
       home: {
-        ...DEFAULT_WEBSITE_CONTENT.home,
-        ...stored?.website?.home,
+        ...mergedHome,
+        slides,
       },
       pages: Array.isArray(stored?.website?.pages)
         ? stored.website.pages
