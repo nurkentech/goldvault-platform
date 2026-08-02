@@ -6,6 +6,7 @@ import {
   Bell, Search, Menu, X, TrendingUp,
   AlertTriangle, ShieldCheck, KeyRound, Scale, Bot,
   PanelsTopLeft,
+  Newspaper,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 
@@ -17,6 +18,7 @@ const NAV_ITEMS = [
   { label: "Investments", icon: TrendingUp, path: "/admin/investments" },
   { label: "Announcements", icon: Megaphone, path: "/admin/announcements" },
   { label: "Website Content", icon: PanelsTopLeft, path: "/admin/content" },
+  { label: "News & Blog", icon: Newspaper, path: "/admin/blog" },
   { label: "Platform Settings", icon: Settings, path: "/admin/settings" },
   { label: "Compliance & Operations", icon: Scale, path: "/admin/operations" },
   { label: "AI Review Copilot", icon: Bot, path: "/admin/ai-copilot" },

@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { TrendingUp, TrendingDown, ExternalLink, Shield, Lock, Eye, Server, FileCheck, Fingerprint } from "lucide-react";
 import { useLocation } from "wouter";
+import { trpc } from "@/lib/trpc";
 
 // ─── Market Movers ───────────────────────────────────────────────────────────
 const MARKET_TABS = ["Top Gainers", "Top Losers", "Trending", "New Listings"];
@@ -110,105 +111,61 @@ export function MarketMovers() {
 }
 
 // ─── News Section ────────────────────────────────────────────────────────────
-const NEWS_ITEMS = [
-  {
-    source: "CoinDesk",
-    title: "Bitcoin Surges Past $67K as Institutional Demand Accelerates",
-    date: "2 hours ago",
-    img: "https://images.unsplash.com/photo-1518546305927-5a555bb7020d?w=400&q=80",
-    tag: "Bitcoin",
-  },
-  {
-    source: "CoinTelegraph",
-    title: "Ethereum ETF Inflows Hit Record $500M in Single Day",
-    date: "4 hours ago",
-    img: "https://images.unsplash.com/photo-1639762681485-074b7f938ba0?w=400&q=80",
-    tag: "Ethereum",
-  },
-  {
-    source: "Decrypt",
-    title: "Solana DeFi TVL Reaches All-Time High of $8.2 Billion",
-    date: "6 hours ago",
-    img: "https://images.unsplash.com/photo-1642790551116-18e150f248e5?w=400&q=80",
-    tag: "DeFi",
-  },
-  {
-    source: "CryptoSlate",
-    title: "Gold-Backed Tokens See 340% Volume Surge Amid Market Uncertainty",
-    date: "8 hours ago",
-    img: "https://images.unsplash.com/photo-1610375461246-83df859d849d?w=400&q=80",
-    tag: "Gold",
-  },
-  {
-    source: "CoinDesk",
-    title: "SEC Approves Three New Spot Crypto ETFs for Major Exchanges",
-    date: "10 hours ago",
-    img: "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=400&q=80",
-    tag: "Regulation",
-  },
-  {
-    source: "CoinTelegraph",
-    title: "NFT Market Rebounds with $1.2B in Weekly Sales Volume",
-    date: "12 hours ago",
-    img: "https://images.unsplash.com/photo-1620321023374-d1a68fbc720d?w=400&q=80",
-    tag: "NFT",
-  },
-];
-
 export function NewsSection() {
   const [, navigate] = useLocation();
+  const news = trpc.advanced.blog.list.useQuery({ limit: 6 });
+  const posts = Array.isArray(news.data) ? news.data : [];
   return (
     <section id="news" className="bg-slate-800/40 py-16">
       <div className="max-w-[1400px] mx-auto px-4 lg:px-6">
         <div className="flex items-end justify-between mb-8">
           <div>
             <p className="text-amber-400 text-sm font-semibold uppercase tracking-wider mb-1">Latest Updates</p>
-            <h2 className="text-3xl font-black text-white">Crypto News</h2>
+            <h2 className="text-3xl font-black text-white">News & Insights</h2>
           </div>
           <button onClick={() => navigate("/blog")} className="text-sm text-amber-400 hover:text-amber-300 font-medium transition-colors">
             View All News →
           </button>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          {NEWS_ITEMS.map((item, i) => (
+        {news.isLoading ? (
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">{[1, 2, 3].map((item) => <div key={item} className="h-72 animate-pulse rounded-2xl bg-slate-800" />)}</div>
+        ) : posts.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-white/10 bg-slate-900/40 p-12 text-center"><p className="font-semibold text-white">No news has been published yet.</p><p className="mt-1 text-sm text-slate-500">Published Blog CMS articles will appear here automatically.</p></div>
+        ) : <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          {posts.map((item, i) => (
             <motion.div
-              key={i}
+              key={item.id}
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ delay: i * 0.08 }}
               whileHover={{ y: -4 }}
-              onClick={() => navigate("/blog")}
+              onClick={() => navigate(`/blog/${item.slug}`)}
               className="group bg-slate-800 border border-white/8 hover:border-amber-400/20 rounded-2xl overflow-hidden cursor-pointer transition-all"
             >
               <div className="relative h-44 overflow-hidden">
-                <img
-                  src={item.img}
-                  alt={item.title}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                  loading="lazy"
-                />
+                {item.coverImageUrl ? <img src={item.coverImageUrl} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" /> : <div className="h-full w-full bg-gradient-to-br from-amber-500/20 via-slate-800 to-blue-500/15" />}
                 <div className="absolute inset-0 bg-gradient-to-t from-slate-900/80 to-transparent" />
                 <span className="absolute top-3 left-3 px-2.5 py-1 rounded-full bg-amber-500/90 text-slate-900 text-xs font-bold">
-                  {item.tag}
+                  News
                 </span>
               </div>
               <div className="p-4">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-semibold text-amber-400">{item.source}</span>
-                  <span className="text-xs text-slate-500">{item.date}</span>
+                  <span className="text-xs font-semibold text-amber-400">GoldVaults</span>
+                  <span className="text-xs text-slate-500">{new Date(item.publishedAt || item.createdAt).toLocaleDateString()}</span>
                 </div>
                 <h3 className="text-sm font-bold text-white leading-snug group-hover:text-amber-400 transition-colors line-clamp-2 mb-3">
                   {item.title}
                 </h3>
-                <button onClick={(e) => { e.stopPropagation(); navigate("/blog"); }} className="flex items-center gap-1 text-xs text-slate-400 hover:text-amber-400 transition-colors">
+                <button onClick={(e) => { e.stopPropagation(); navigate(`/blog/${item.slug}`); }} className="flex items-center gap-1 text-xs text-slate-400 hover:text-amber-400 transition-colors">
                   Read More <ExternalLink className="w-3 h-3" />
                 </button>
               </div>
             </motion.div>
           ))}
-        </div>
+        </div>}
       </div>
     </section>
   );
