@@ -414,7 +414,7 @@ export const appRouter = router({
         });
         return { success: true };
       }),
-    call: router({
+    calls: router({
       iceServers: protectedProcedure.query(() => {
         const servers: Array<{ urls: string; username?: string; credential?: string }> = [
           { urls: process.env.STUN_URL || "stun:stun.l.google.com:19302" },

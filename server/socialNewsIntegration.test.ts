@@ -33,7 +33,7 @@ describe("Social Hub and News CMS integration", () => {
     expect(callControls).toContain("getUserMedia");
     expect(callControls).toContain("Start audio call");
     expect(callControls).toContain("Start video call");
-    expect(routers).toContain("call: router({");
+    expect(routers).toContain("calls: router({");
   });
 
   it("uses published Blog CMS posts for the homepage News feed", () => {

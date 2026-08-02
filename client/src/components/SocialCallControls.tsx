@@ -41,24 +41,24 @@ export default function SocialCallControls({
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const remoteAudioRef = useRef<HTMLAudioElement>(null);
 
-  const incoming = trpc.social.call.incoming.useQuery(undefined, {
+  const incoming = trpc.social.calls.incoming.useQuery(undefined, {
     enabled: Boolean(user) && !activeCall,
     refetchInterval: 2_000,
     retry: false,
   });
-  const iceServers = trpc.social.call.iceServers.useQuery(undefined, {
+  const iceServers = trpc.social.calls.iceServers.useQuery(undefined, {
     enabled: Boolean(user),
     staleTime: 5 * 60_000,
     retry: false,
   });
-  const callState = trpc.social.call.get.useQuery(
+  const callState = trpc.social.calls.get.useQuery(
     { callId: activeCall?.id ?? "00000000-0000-0000-0000-000000000000" },
     { enabled: Boolean(activeCall), refetchInterval: 1_000, retry: false },
   );
-  const createCall = trpc.social.call.create.useMutation();
-  const respond = trpc.social.call.respond.useMutation();
-  const signal = trpc.social.call.signal.useMutation();
-  const endCall = trpc.social.call.end.useMutation();
+  const createCall = trpc.social.calls.create.useMutation();
+  const respond = trpc.social.calls.respond.useMutation();
+  const signal = trpc.social.calls.signal.useMutation();
+  const endCall = trpc.social.calls.end.useMutation();
 
   const incomingContact = contacts.find((member) => member.id === incoming.data?.fromUserId);
   const activeContact = contacts.find((member) => member.id === activeCall?.peerId) ?? contact;
@@ -156,7 +156,7 @@ export default function SocialCallControls({
       await signal.mutateAsync({ callId: call.id, type: "answer", sdp: answer.sdp });
       await respond.mutateAsync({ callId: call.id, accept: true });
       setConnectionState("connecting");
-      await utils.social.call.incoming.invalidate();
+      await utils.social.calls.incoming.invalidate();
     } catch (error) {
       releaseMedia();
       toast.error(error instanceof Error ? error.message : "Unable to answer the call");
@@ -166,7 +166,7 @@ export default function SocialCallControls({
   const declineIncoming = async () => {
     if (!incoming.data) return;
     await respond.mutateAsync({ callId: incoming.data.id, accept: false });
-    await utils.social.call.incoming.invalidate();
+    await utils.social.calls.incoming.invalidate();
   };
 
   useEffect(() => {
