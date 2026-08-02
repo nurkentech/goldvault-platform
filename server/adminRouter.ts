@@ -42,6 +42,17 @@ const safeCmsUrl = z
       /^https:\/\/[^\s]+$/i.test(value),
     "Use a site path or secure HTTPS URL",
   );
+const safeCmsCtaUrl = z
+  .string()
+  .trim()
+  .max(2048)
+  .refine(
+    (value) =>
+      value === "#signup" ||
+      value.startsWith("/") ||
+      /^https:\/\/[^\s]+$/i.test(value),
+    "Use #signup, a site path, or a secure HTTPS URL",
+  );
 const reservedPageSlugs = new Set([
   "admin", "dashboard", "profile", "verify-2fa", "api", "assets", "buy-gold",
   "gvt-token", "vault-storage", "physical-delivery", "gold-price-alerts",
@@ -67,6 +78,24 @@ const websiteBrandingSchema = z.object({
   logoUrl: safeCmsUrl,
   logoAlt: safeCmsText(1, 160),
 });
+const websiteHeroStatSchema = z.object({
+  label: safeCmsText(1, 80),
+  value: safeCmsText(1, 80),
+});
+const websiteHeroSlideSchema = z.object({
+  id: safeCmsText(1, 96),
+  enabled: z.boolean(),
+  badge: z.string().trim().max(160),
+  title: safeCmsText(1, 160),
+  titleAccent: z.string().trim().max(160),
+  subtitle: safeCmsText(1, 1200),
+  primaryCtaLabel: safeCmsText(1, 64),
+  primaryCtaUrl: safeCmsCtaUrl,
+  secondaryCtaLabel: safeCmsText(1, 64),
+  secondaryCtaUrl: safeCmsCtaUrl,
+  heroImageUrl: safeCmsUrl,
+  stats: z.array(websiteHeroStatSchema).max(3),
+});
 const websiteHomeSchema = z.object({
   badge: z.string().trim().max(160),
   title: safeCmsText(1, 160),
@@ -76,6 +105,10 @@ const websiteHomeSchema = z.object({
   secondaryCtaLabel: safeCmsText(1, 64),
   secondaryCtaUrl: safeCmsUrl.refine((value) => value !== "", "CTA URL is required"),
   heroImageUrl: safeCmsUrl,
+  slides: z.array(websiteHeroSlideSchema).min(1).max(5),
+}).refine((home) => home.slides.some((slide) => slide.enabled), {
+  message: "At least one homepage banner must be visible",
+  path: ["slides"],
 });
 const websitePageSchema = z.object({
   id: z.string().uuid().optional(),
@@ -180,7 +213,7 @@ export const adminRouter = router({
         if (buffer.length === 0 || buffer.length > 2 * 1024 * 1024) {
           throw new TRPCError({
             code: "BAD_REQUEST",
-            message: "Brand images must be smaller than 2 MB",
+            message: "Website images must be smaller than 2 MB",
           });
         }
         const extension = {
