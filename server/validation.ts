@@ -23,6 +23,13 @@ export const secureUploadUrl = z.string().refine((value) => {
   return parsed.success && new URL(value).protocol === "https:";
 }, "A secure uploaded file URL is required");
 
+export const publicCmsAssetUrl = z.string().refine((value) => {
+  if (/^\/uploads\/cms\/[A-Za-z0-9/_.,%+-]+$/.test(value)) return true;
+  if (/^\/manus-storage\/[A-Za-z0-9/_.,%+-]+$/.test(value)) return true;
+  const parsed = z.string().url().safeParse(value);
+  return parsed.success && new URL(value).protocol === "https:";
+}, "A secure CMS image URL is required");
+
 export const profileUpdateSchema = z.object({
   name: safeText(1, 128).optional(),
   username: z.string().trim().toLowerCase().regex(/^[a-z0-9_]{3,32}$/, "Use 3-32 letters, numbers, or underscores").optional(),

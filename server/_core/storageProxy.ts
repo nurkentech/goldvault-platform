@@ -1,7 +1,22 @@
-import type { Express } from "express";
+import express, { type Express } from "express";
 import { ENV } from "./env";
+import { getLocalPublicUploadRoot } from "../storage";
 
 export function registerStorageProxy(app: Express) {
+  app.use(
+    "/uploads/cms",
+    express.static(`${getLocalPublicUploadRoot()}/cms`, {
+      dotfiles: "deny",
+      fallthrough: false,
+      immutable: true,
+      index: false,
+      maxAge: "1y",
+      setHeaders(res) {
+        res.setHeader("X-Content-Type-Options", "nosniff");
+      },
+    }),
+  );
+
   app.get("/manus-storage/*", async (req, res) => {
     const key = (req.params as Record<string, string>)[0];
     if (!key) {

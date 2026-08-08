@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cleanText, httpsUrl, investmentCreationSchema, kycSubmissionSchema, metadataSchema, profileUpdateSchema, secureUploadUrl } from "./validation";
+import { cleanText, httpsUrl, investmentCreationSchema, kycSubmissionSchema, metadataSchema, profileUpdateSchema, publicCmsAssetUrl, secureUploadUrl } from "./validation";
 
 describe("request validation", () => {
   it("normalizes whitespace and removes control characters", () => {
@@ -24,6 +24,12 @@ describe("request validation", () => {
   it("accepts only the protected same-origin upload path", () => {
     expect(secureUploadUrl.parse("/manus-storage/user/id-front.png")).toContain("/manus-storage/");
     expect(() => secureUploadUrl.parse("/uploads/id-front.png")).toThrow();
+  });
+
+  it("accepts local public CMS images without weakening private upload validation", () => {
+    expect(publicCmsAssetUrl.parse("/uploads/cms/branding/banner_ab12cd34.webp")).toContain("/uploads/cms/");
+    expect(() => publicCmsAssetUrl.parse("/uploads/private/id-front.png")).toThrow();
+    expect(() => secureUploadUrl.parse("/uploads/cms/branding/banner_ab12cd34.webp")).toThrow();
   });
 
   it("requires KYC front and selfie files", () => {
