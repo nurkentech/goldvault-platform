@@ -27,21 +27,9 @@ export async function createContext(
   let pendingTwoFactorUserId: number | null = null;
   let pendingTwoFactorToken: string | null = null;
 
-  try {
-    user = await sdk.authenticateRequest(opts.req);
-  } catch (error) {
-    // Authentication is optional for public procedures.
-    user = null;
-    const cookieToken = (opts.req as typeof opts.req & { cookies?: Record<string, string> }).cookies?.[COOKIE_NAME];
-    const bearerToken = opts.req.headers.authorization?.startsWith("Bearer ") ? opts.req.headers.authorization.slice(7) : null;
-    const sessionToken = cookieToken ?? bearerToken;
-    if (sessionToken) {
-      const pending = await getPendingTwoFactorSession(sessionToken);
-      if (pending) { pendingTwoFactorUserId = pending.userId; pendingTwoFactorToken = sessionToken; }
-    }
-  }
-
-  // Check for admin session cookie
+  // Custom administrators use a locally signed JWT. Verify it before the
+  // regular user session so admin-only requests do not perform unnecessary
+  // user/session database lookups on resource-constrained shared hosting.
   try {
     const adminToken = (opts.req as any).cookies?.[ADMIN_COOKIE_NAME];
     if (adminToken) {
@@ -52,6 +40,22 @@ export async function createContext(
     }
   } catch {
     adminSession = null;
+  }
+
+  if (!adminSession) {
+    try {
+      user = await sdk.authenticateRequest(opts.req);
+    } catch (error) {
+      // Authentication is optional for public procedures.
+      user = null;
+      const cookieToken = (opts.req as typeof opts.req & { cookies?: Record<string, string> }).cookies?.[COOKIE_NAME];
+      const bearerToken = opts.req.headers.authorization?.startsWith("Bearer ") ? opts.req.headers.authorization.slice(7) : null;
+      const sessionToken = cookieToken ?? bearerToken;
+      if (sessionToken) {
+        const pending = await getPendingTwoFactorSession(sessionToken);
+        if (pending) { pendingTwoFactorUserId = pending.userId; pendingTwoFactorToken = sessionToken; }
+      }
+    }
   }
 
   return {
