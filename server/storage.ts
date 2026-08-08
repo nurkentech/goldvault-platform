@@ -1,24 +1,29 @@
-// Preconfigured storage helpers for Manus WebDev templates
-// Uploads via Forge Server presigned URL to S3 (PUT direct).
-// Downloads return /manus-storage/{key} paths served via 307 redirect.
+// Public CMS images use Forge/S3 when configured. On self-hosted production
+// (including Namecheap), CMS images fall back to a persistent local directory.
+// Private uploads still require Forge so they are never exposed accidentally.
 
+import { mkdir, writeFile } from "node:fs/promises";
+import path from "node:path";
 import { ENV } from "./_core/env";
 
 function getForgeConfig() {
   const forgeUrl = ENV.forgeApiUrl;
   const forgeKey = ENV.forgeApiKey;
 
-  if (!forgeUrl || !forgeKey) {
-    throw new Error(
-      "Storage config missing: set BUILT_IN_FORGE_API_URL and BUILT_IN_FORGE_API_KEY",
-    );
-  }
+  if (!forgeUrl || !forgeKey) return null;
 
   return { forgeUrl: forgeUrl.replace(/\/+$/, ""), forgeKey };
 }
 
 function normalizeKey(relKey: string): string {
-  return relKey.replace(/^\/+/, "");
+  const key = relKey.replace(/\\/g, "/").replace(/^\/+/, "");
+  if (!key || key.split("/").some((segment) => !segment || segment === "." || segment === "..")) {
+    throw new Error("Invalid storage key");
+  }
+  if (!/^[A-Za-z0-9][A-Za-z0-9/_.-]*$/.test(key)) {
+    throw new Error("Invalid storage key");
+  }
+  return key;
 }
 
 function appendHashSuffix(relKey: string): string {
@@ -28,13 +33,54 @@ function appendHashSuffix(relKey: string): string {
   return `${relKey.slice(0, lastDot)}_${hash}${relKey.slice(lastDot)}`;
 }
 
+export function getLocalPublicUploadRoot(): string {
+  const configured = process.env.GOLDVAULT_UPLOAD_DIR?.trim();
+  if (configured) return path.resolve(configured);
+
+  // cPanel runs the application with HOME=/home/<account>. Keeping uploads
+  // outside versioned releases ensures banner and blog images survive deploys.
+  if (ENV.isProduction && process.env.HOME) {
+    return path.resolve(process.env.HOME, "goldvault-app", "uploads");
+  }
+
+  return path.resolve(process.cwd(), "uploads");
+}
+
+function publicUploadUrl(key: string): string {
+  return `/uploads/${key.split("/").map(encodeURIComponent).join("/")}`;
+}
+
+async function putLocalCmsAsset(
+  key: string,
+  data: Buffer | Uint8Array | string,
+): Promise<{ key: string; url: string }> {
+  if (!key.startsWith("cms/")) {
+    throw new Error(
+      "Private storage is not configured. Set BUILT_IN_FORGE_API_URL and BUILT_IN_FORGE_API_KEY",
+    );
+  }
+
+  const root = getLocalPublicUploadRoot();
+  const destination = path.resolve(root, ...key.split("/"));
+  if (!destination.startsWith(`${root}${path.sep}`)) {
+    throw new Error("Invalid storage destination");
+  }
+
+  await mkdir(path.dirname(destination), { recursive: true });
+  const payload = typeof data === "string" ? Buffer.from(data) : Buffer.from(data);
+  await writeFile(destination, payload, { flag: "wx" });
+  return { key, url: publicUploadUrl(key) };
+}
+
 export async function storagePut(
   relKey: string,
   data: Buffer | Uint8Array | string,
   contentType = "application/octet-stream",
 ): Promise<{ key: string; url: string }> {
-  const { forgeUrl, forgeKey } = getForgeConfig();
   const key = appendHashSuffix(normalizeKey(relKey));
+  const forgeConfig = getForgeConfig();
+  if (!forgeConfig) return putLocalCmsAsset(key, data);
+  const { forgeUrl, forgeKey } = forgeConfig;
 
   // 1. Get presigned PUT URL from Forge
   const presignUrl = new URL("v1/storage/presign/put", forgeUrl + "/");
@@ -73,12 +119,22 @@ export async function storagePut(
 
 export async function storageGet(relKey: string): Promise<{ key: string; url: string }> {
   const key = normalizeKey(relKey);
+  if (!getForgeConfig() && key.startsWith("cms/")) {
+    return { key, url: publicUploadUrl(key) };
+  }
   return { key, url: `/manus-storage/${key}` };
 }
 
 export async function storageGetSignedUrl(relKey: string): Promise<string> {
-  const { forgeUrl, forgeKey } = getForgeConfig();
   const key = normalizeKey(relKey);
+  const forgeConfig = getForgeConfig();
+  if (!forgeConfig) {
+    if (key.startsWith("cms/")) return publicUploadUrl(key);
+    throw new Error(
+      "Private storage is not configured. Set BUILT_IN_FORGE_API_URL and BUILT_IN_FORGE_API_KEY",
+    );
+  }
+  const { forgeUrl, forgeKey } = forgeConfig;
 
   const getUrl = new URL("v1/storage/presign/get", forgeUrl + "/");
   getUrl.searchParams.set("path", key);
