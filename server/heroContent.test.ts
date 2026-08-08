@@ -5,6 +5,7 @@ import { DEFAULT_HERO_SLIDES, DEFAULT_WEBSITE_CONTENT } from "./platformSettings
 
 const read = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8");
 const settings = read("server/platformSettings.ts");
+const cms = read("server/cms.ts");
 const adminRouter = read("server/adminRouter.ts");
 const adminContent = read("client/src/pages/admin/AdminContent.tsx");
 const heroSlider = read("client/src/components/HeroSlider.tsx");
@@ -35,6 +36,12 @@ describe("admin-managed homepage banners", () => {
     expect(adminContent).toContain("moveHeroSlide");
     expect(adminContent).toContain("removeHeroSlide");
     expect(adminContent).toContain("Save header banners");
+  });
+
+  it("persists the homepage in one atomic database statement", () => {
+    expect(cms).toContain("JSON_SET");
+    expect(cms).toContain("JSON_EXTRACT");
+    expect(cms).not.toContain('saveWebsiteHome(home: WebsiteHomeContent) {\n  return updateWebsite');
   });
 
   it("renders every enabled CMS banner and honors its image and destinations", () => {
