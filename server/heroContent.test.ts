@@ -38,9 +38,11 @@ describe("admin-managed homepage banners", () => {
     expect(adminContent).toContain("Save header banners");
   });
 
-  it("persists homepage content through the portable platform settings writer", () => {
+  it("persists homepage content through an atomic durable file", () => {
     expect(cms).toContain('return updateWebsite((website) => ({ ...website, home }))');
-    expect(cms).toContain("await savePlatformSettings({ ...settings, website })");
+    expect(cms).toContain("writeWebsiteContentFile");
+    expect(cms).toContain("await rename(temporary, destination)");
+    expect(cms).not.toContain("savePlatformSettings");
   });
 
   it("renders every enabled CMS banner and honors its image and destinations", () => {
