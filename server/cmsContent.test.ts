@@ -9,6 +9,7 @@ const publicRouter = read("server/routers.ts");
 const managedPage = read("client/src/pages/ManagedPage.tsx");
 const adminContent = read("client/src/pages/admin/AdminContent.tsx");
 const app = read("client/src/App.tsx");
+const adminMiddleware = read("server/_core/trpc.ts");
 
 describe("website content management", () => {
   it("provides safe defaults without requiring a schema migration", () => {
@@ -24,6 +25,11 @@ describe("website content management", () => {
     expect(adminRouter).toContain("savePage: adminProcedure");
     expect(adminRouter).toContain("deletePage: adminProcedure");
     expect(adminRouter).toContain("uploadBrandAsset: adminProcedure");
+  });
+
+  it("does not let slow audit storage delay completed admin mutations", () => {
+    expect(adminMiddleware).toContain("void recordAdminAudit(");
+    expect(adminMiddleware).not.toContain("await recordAdminAudit(");
   });
 
   it("exposes only published pages through the public content router", () => {

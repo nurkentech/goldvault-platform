@@ -49,7 +49,9 @@ export const adminProcedure = t.procedure.use(
     });
 
     if (result.ok && opts.type === "mutation") {
-      await recordAdminAudit({
+      // Audit recording is best effort and must not hold an otherwise completed
+      // admin mutation open until LiteSpeed terminates the shared-host request.
+      void recordAdminAudit({
         adminId: ctx.adminSession?.adminId ?? ctx.user?.id,
         adminUsername: ctx.adminSession?.username ?? ctx.user?.username ?? ctx.user?.email,
         action: opts.path,
