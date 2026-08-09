@@ -1,9 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { sql } from "drizzle-orm";
-import { platformSettings } from "../drizzle/schema";
-import { getDb } from "./db";
 import {
-  DEFAULT_PLATFORM_SETTINGS,
   getPlatformSettings,
   savePlatformSettings,
   type WebsiteContentInput,
@@ -32,32 +28,10 @@ export async function saveWebsiteBranding(branding: WebsiteBranding) {
 }
 
 export async function saveWebsiteHome(home: WebsiteHomeContent) {
-  const db = await getDb();
-  if (!db) throw new Error("Database unavailable");
-
-  const initialSettings = {
-    ...DEFAULT_PLATFORM_SETTINGS,
-    website: {
-      ...DEFAULT_PLATFORM_SETTINGS.website,
-      home,
-    },
-  };
-  const serializedHome = JSON.stringify(home);
-
-  // This is deliberately one atomic statement. The previous read-merge-write
-  // sequence performed multiple round trips and could exceed Namecheap's
-  // request timeout. JSON_EXTRACT converts the parameter into a JSON value
-  // instead of storing it as an escaped string.
-  await db
-    .insert(platformSettings)
-    .values({ id: 1, settings: initialSettings })
-    .onDuplicateKeyUpdate({
-      set: {
-        settings: sql`JSON_SET(${platformSettings.settings}, '$.website.home', JSON_EXTRACT(${serializedHome}, '$'))`,
-      },
-    });
-
-  return home;
+  // Use the same portable JSON-column write used by all platform settings.
+  // Namecheap's MySQL/MariaDB accepted the previous JSON_SET upsert but did
+  // not persist its nested object, resulting in a false success response.
+  return updateWebsite((website) => ({ ...website, home }));
 }
 
 export async function saveWebsitePage(
