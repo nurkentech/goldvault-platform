@@ -38,10 +38,9 @@ describe("admin-managed homepage banners", () => {
     expect(adminContent).toContain("Save header banners");
   });
 
-  it("persists the homepage in one atomic database statement", () => {
-    expect(cms).toContain("JSON_SET");
-    expect(cms).toContain("JSON_EXTRACT");
-    expect(cms).not.toContain('saveWebsiteHome(home: WebsiteHomeContent) {\n  return updateWebsite');
+  it("persists homepage content through the portable platform settings writer", () => {
+    expect(cms).toContain('return updateWebsite((website) => ({ ...website, home }))');
+    expect(cms).toContain("await savePlatformSettings({ ...settings, website })");
   });
 
   it("renders every enabled CMS banner and honors its image and destinations", () => {
